@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: ppm.c,v 1.8 1995/09/24 00:46:07 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -49,7 +47,7 @@
 #include "kljcpyrt.h"
 
 static void ppm_setup _P((FILE *));
-static void ppm_row _P((u_char *));
+static int  ppm_row _P((u_char *));
 
 static FILE    *outs;
 static unsigned bytes_per_row;
@@ -75,8 +73,10 @@ static void ppm_setup(s)
 }
 
 
-static void ppm_row(row)
+static int ppm_row(row)
      u_char *row;
 {
   assert(fwrite(row, 1, bytes_per_row, outs) == bytes_per_row);
+
+  return 0;
 }

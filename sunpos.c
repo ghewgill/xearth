@@ -3,14 +3,14 @@
  * kirk johnson
  * july 1993
  *
+ * includes revisions from Frank T. Solensky, february 1999
+ *
  * code for calculating the position on the earth's surface for which
  * the sun is directly overhead (adapted from _practical astronomy
  * with your calculator, third edition_, peter duffett-smith,
  * cambridge university press, 1988.)
  *
- * RCS $Id: sunpos.c,v 1.4 1995/09/24 00:51:03 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -53,7 +53,8 @@
 #include "xearth.h"
 #include "kljcpyrt.h"
 
-#define TWOPI (2*M_PI)
+#define TWOPI         (2*M_PI)
+#define DegsToRads(x) ((x)*(TWOPI/360))
 
 /*
  * the epoch upon which these astronomical calculations are based is
@@ -85,8 +86,8 @@
  * Eccentricity (eccentricity of orbit)                0.016713
  */
 
-#define Epsilon_g    (279.403303*(TWOPI/360))
-#define OmegaBar_g   (282.768422*(TWOPI/360))
+#define Epsilon_g    (DegsToRads(279.403303))
+#define OmegaBar_g   (DegsToRads(282.768422))
 #define Eccentricity (0.016713)
 
 /*
@@ -96,7 +97,29 @@
  */
 #define MeanObliquity (23.440592*(TWOPI/360))
 
+/*
+ * Lunar parameters, epoch January 0, 1990.0
+ */
+#define MoonMeanLongitude        DegsToRads(318.351648)
+#define MoonMeanLongitudePerigee DegsToRads( 36.340410)
+#define MoonMeanLongitudeNode    DegsToRads(318.510107)
+#define MoonInclination          DegsToRads(  5.145396)
+
+#define SideralMonth (27.3217)
+
+/*
+ * Force an angular value into the range [-PI, +PI]
+ */
+#define Normalize(x)                        \
+  do {                                      \
+    if ((x) < -M_PI)                        \
+      do (x) += TWOPI; while ((x) < -M_PI); \
+    else if ((x) > M_PI)                    \
+      do (x) -= TWOPI; while ((x) > M_PI);  \
+  } while (0)
+
 static double solve_keplers_equation _P((double));
+static double mean_sun _P((double));
 static double sun_ecliptic_longitude _P((time_t));
 static void   ecliptic_to_equatorial _P((double, double, double *, double *));
 static double julian_date _P((int, int, int));
@@ -125,24 +148,37 @@ static double solve_keplers_equation(M)
 
 
 /*
+ * Calculate the position of the mean sun: where the sun would
+ * be if the earth's orbit were circular instead of ellipictal.
+ */
+
+static double mean_sun (D)
+     double D;                  /* days since ephemeris epoch */
+{
+  double N, M;
+
+  N = RadsPerDay * D;
+  N = fmod(N, TWOPI);
+  if (N < 0) N += TWOPI;
+
+  M = N + Epsilon_g - OmegaBar_g;
+  if (M < 0) M += TWOPI;
+  return M;
+}
+
+/*
  * compute ecliptic longitude of sun (in radians)
  * (after duffett-smith, section 47)
  */
 static double sun_ecliptic_longitude(ssue)
      time_t ssue;               /* seconds since unix epoch */
 {
-  double D, N;
+  double D;
   double M_sun, E;
   double v;
 
   D = DaysSinceEpoch(ssue);
-
-  N = RadsPerDay * D;
-  N = fmod(N, TWOPI);
-  if (N < 0) N += TWOPI;
-
-  M_sun = N + Epsilon_g - OmegaBar_g;
-  if (M_sun < 0) M_sun += TWOPI;
+  M_sun = mean_sun(D);
 
   E = solve_keplers_equation(M_sun);
   v = 2 * atan(sqrt((1+Eccentricity)/(1-Eccentricity)) * tan(E/2));
@@ -255,17 +291,55 @@ void sun_position(ssue, lat, lon)
   ecliptic_to_equatorial(lambda, 0.0, &alpha, &delta);
 
   tmp = alpha - (TWOPI/24)*GST(ssue);
-  if (tmp < -M_PI)
-  {
-    do tmp += TWOPI;
-    while (tmp < -M_PI);
-  }
-  else if (tmp > M_PI)
-  {
-    do tmp -= TWOPI;
-    while (tmp < -M_PI);
-  }
-
+  Normalize(tmp);
   *lon = tmp * (360/TWOPI);
+  *lat = delta * (360/TWOPI);
+}
+
+
+/*
+ * given a particular time (expressed in seconds since the unix
+ * epoch), compute position on the earth (lat, lon) such that the
+ * moon is directly overhead.
+ *
+ * Based on duffett-smith **2nd ed** section 61; combines some steps
+ * into single expressions to reduce the number of extra variables.
+ */
+void moon_position(ssue, lat, lon)
+     time_t  ssue;              /* seconds since unix epoch */
+     double *lat;               /* (return) latitude        */
+     double *lon;               /* (return) longitude       */
+{
+  double lambda, beta;
+  double D, L, Ms, Mm, N, Ev, Ae, Ec, alpha, delta;
+
+  D      = DaysSinceEpoch(ssue);
+  lambda = sun_ecliptic_longitude(ssue);
+  Ms     = mean_sun(D);
+
+  L = fmod(D/SideralMonth, 1.0)*TWOPI + MoonMeanLongitude;
+  Normalize(L);
+  Mm = L - DegsToRads(0.1114041*D) - MoonMeanLongitudePerigee;
+  Normalize(Mm);
+  N = MoonMeanLongitudeNode - DegsToRads(0.0529539*D);
+  Normalize(N);
+  Ev  = DegsToRads(1.2739) * sin(2.0*(L-lambda)-Mm);
+  Ae  = DegsToRads(0.1858) * sin(Ms);
+  Mm += Ev - Ae - DegsToRads(0.37)*sin(Ms);
+  Ec  = DegsToRads(6.2886) * sin(Mm);
+  L  += Ev + Ec - Ae + DegsToRads(0.214) * sin(2.0*Mm);
+  L  += DegsToRads(0.6583) * sin(2.0*(L-lambda));
+  N  -= DegsToRads(0.16) * sin(Ms);
+
+  L -= N;
+  lambda =(fabs(cos(L)) < 1e-12) ?
+    (N + sin(L) * cos(MoonInclination) * M_PI/2) :
+    (N + atan2(sin(L) * cos(MoonInclination), cos(L)));
+  Normalize(lambda);
+  beta = asin(sin(L) * sin(MoonInclination));
+  ecliptic_to_equatorial(lambda, beta, &alpha, &delta);
+  alpha -= (TWOPI/24)*GST(ssue);
+  Normalize(alpha);
+  *lon = alpha * (360/TWOPI);
   *lat = delta * (360/TWOPI);
 }

@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: gif.c,v 1.12 1995/09/25 01:09:42 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -50,7 +48,7 @@
 #include "kljcpyrt.h"
 
 static void gif_setup _P((FILE *));
-static void gif_row _P((u_char *));
+static int  gif_row _P((u_char *));
 static void gif_cleanup _P((void));
 
 static u16or32 *dith;
@@ -96,7 +94,7 @@ static void gif_setup(s)
 }
 
 
-static void gif_row(row)
+static int gif_row(row)
      u_char *row;
 {
   int      i, i_lim;
@@ -110,6 +108,8 @@ static void gif_row(row)
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
     gifout_put_pixel((int) tmp[i]);
+
+  return 0;
 }
 
 

@@ -3,9 +3,7 @@
  * kirk johnson
  * august 1993
  *
- * RCS $Id: scan.c,v 1.16 1995/09/25 01:12:11 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -76,6 +74,13 @@ void    merc_scan_along_curve _P((double *, double *, int));
 double  merc_find_edge_xing _P((double *, double *));
 void    merc_handle_xings _P((void));
 void    merc_scan_edge _P((EdgeXing *, EdgeXing *));
+void    cyl_scan_outline _P((void));
+void    cyl_scan_curves _P((void));
+double *cyl_extract_curve _P((int, short *));
+void    cyl_scan_along_curve _P((double *, double *, int));
+double  cyl_find_edge_xing _P((double *, double *));
+void    cyl_handle_xings _P((void));
+void    cyl_scan_edge _P((EdgeXing *, EdgeXing *));
 void    xing_error _P((const char *, int, int, int, EdgeXing *));
 void    scan _P((double, double, double, double));
 void    get_scanbits _P((int));
@@ -84,13 +89,10 @@ static int double_comp _P((const void *, const void *));
 static int scanbit_comp _P((const void *, const void *));
 static int orth_edgexing_comp _P((const void *, const void *));
 static int merc_edgexing_comp _P((const void *, const void *));
+static int cyl_edgexing_comp _P((const void *, const void *));
 
 ViewPosInfo view_pos_info;
-
-double proj_scale;
-double proj_xofs;
-double proj_yofs;
-double inv_proj_scale;
+ProjInfo    proj_info;
 
 int     first_scan = 1;
 ExtArr  scanbits;
@@ -205,25 +207,89 @@ static int merc_edgexing_comp(a, b)
 }
 
 
+static int cyl_edgexing_comp(a, b)
+     const void *a;
+     const void *b;
+{
+  double val_a;
+  double val_b;
+  int    rslt;
+
+  val_a = ((const EdgeXing *) a)->angle;
+  val_b = ((const EdgeXing *) b)->angle;
+
+  if (val_a < val_b)
+  {
+    rslt = -1;
+  }
+  else if (val_a > val_b)
+  {
+    rslt = 1;
+  }
+  else if (val_a == 0)
+  {
+    val_a = ((const EdgeXing *) a)->y;
+    val_b = ((const EdgeXing *) b)->y;
+
+    if (val_a < val_b)
+      rslt = -1;
+    else if (val_a > val_b)
+      rslt = 1;
+    else
+      rslt = 0;
+  }
+  else if (val_a == 2)
+  {
+    val_a = ((const EdgeXing *) a)->y;
+    val_b = ((const EdgeXing *) b)->y;
+
+    if (val_a > val_b)
+      rslt = -1;
+    else if (val_a < val_b)
+      rslt = 1;
+    else
+      rslt = 0;
+  }
+  else
+  {
+    /* keep lint happy */
+    rslt = 0;
+    assert(0);
+  }
+
+  return rslt;
+}
+
+
 void scan_map()
 {
-  int i;
+  int          i;
+  ViewPosInfo *vpi;
+  ProjInfo    *pi;
 
-  view_pos_info.cos_lat = cos(view_lat * (M_PI/180));
-  view_pos_info.sin_lat = sin(view_lat * (M_PI/180));
-  view_pos_info.cos_lon = cos(view_lon * (M_PI/180));
-  view_pos_info.sin_lon = sin(view_lon * (M_PI/180));
-  view_pos_info.cos_rot = cos(view_rot * (M_PI/180));
-  view_pos_info.sin_rot = sin(view_rot * (M_PI/180));
+  vpi = &view_pos_info;
+  vpi->cos_lat = cos(view_lat * (M_PI/180));
+  vpi->sin_lat = sin(view_lat * (M_PI/180));
+  vpi->cos_lon = cos(view_lon * (M_PI/180));
+  vpi->sin_lon = sin(view_lon * (M_PI/180));
+  vpi->cos_rot = cos(view_rot * (M_PI/180));
+  vpi->sin_rot = sin(view_rot * (M_PI/180));
 
+  pi = &proj_info;
   if (proj_type == ProjTypeOrthographic)
-    proj_scale = ((hght < wdth) ? hght : wdth) * (view_mag / 2) * 0.99;
-  else /* (proj_type == ProjTypeMercator) */
-    proj_scale = (view_mag * wdth) / (2 * M_PI);
+  {
+    pi->proj_scale = ((hght < wdth) ? hght : wdth) * (view_mag / 2) * 0.99;
+  }
+  else
+  {
+    /* proj_type is either ProjTypeMercator or ProjTypeCylindrical
+     */
+    pi->proj_scale = (view_mag * wdth) / (2 * M_PI);
+  }
 
-  proj_xofs      = (double) wdth / 2 + shift_x;
-  proj_yofs      = (double) hght / 2 + shift_y;
-  inv_proj_scale = 1 / proj_scale;
+  pi->proj_xofs      = (double) wdth / 2 + shift_x;
+  pi->proj_yofs      = (double) hght / 2 + shift_y;
+  pi->inv_proj_scale = 1 / pi->proj_scale;
 
   /* the first time through, allocate scanbits and edgexings;
    * on subsequent passes, simply reset them.
@@ -252,10 +318,15 @@ void scan_map()
     orth_scan_outline();
     orth_scan_curves();
   }
-  else /* (proj_type == ProjTypeMercator) */
+  else if (proj_type == ProjTypeMercator)
   {
     merc_scan_outline();
     merc_scan_curves();
+  }
+  else /* (proj_type == ProjTypeCylindrical) */
+  {
+    cyl_scan_outline();
+    cyl_scan_curves();
   }
 
   for (i=0; i<hght; i++)
@@ -496,10 +567,13 @@ void orth_scan_arc(x_0, y_0, a_0, x_1, y_1, a_1)
   double angle, step;
   double prev_x, prev_y;
   double curr_x, curr_y;
+  double c_step, s_step;
+  double arc_x, arc_y;
+  double tmp;
 
   assert(a_0 < a_1);
 
-  step = inv_proj_scale * 10;
+  step = proj_info.inv_proj_scale * 10;
   if (step > 0.05) step = 0.05;
   lo = ceil(a_0 / step);
   hi = floor(a_1 / step);
@@ -507,15 +581,31 @@ void orth_scan_arc(x_0, y_0, a_0, x_1, y_1, a_1)
   prev_x = XPROJECT(x_0);
   prev_y = YPROJECT(y_0);
 
-  for (i=lo; i<=hi; i++)
+  if (lo <= hi)
   {
-    angle  = i * step;
-    curr_x = XPROJECT(cos(angle));
-    curr_y = YPROJECT(sin(angle));
-    scan(prev_x, prev_y, curr_x, curr_y);
+    c_step = cos(step);
+    s_step = sin(step);
 
-    prev_x = curr_x;
-    prev_y = curr_y;
+    angle = lo * step;
+    arc_x = cos(angle);
+    arc_y = sin(angle);
+
+    for (i=lo; i<=hi; i++)
+    {
+      curr_x = XPROJECT(arc_x);
+      curr_y = YPROJECT(arc_y);
+      scan(prev_x, prev_y, curr_x, curr_y);
+
+      /* instead of repeatedly calling cos() and sin() to get the next
+       * values for arc_x and arc_y, simply rotate the existing values
+       */
+      tmp   = (c_step * arc_x) - (s_step * arc_y);
+      arc_y = (s_step * arc_x) + (c_step * arc_y);
+      arc_x = tmp;
+
+      prev_x = curr_x;
+      prev_y = curr_y;
+    }
   }
 
   curr_x = XPROJECT(x_1);
@@ -832,6 +922,375 @@ void merc_handle_xings()
 
 
 void merc_scan_edge(from, to)
+     EdgeXing *from;
+     EdgeXing *to;
+{
+  int    s0, s1, s_new;
+  double x_0, x_1, x_new;
+  double y_0, y_1, y_new;
+
+  s0 = from->angle;
+  x_0 = XPROJECT(from->x);
+  y_0 = YPROJECT(from->y);
+
+  s1 = to->angle;
+  x_1 = XPROJECT(to->x);
+  y_1 = YPROJECT(to->y);
+
+  while (s0 != s1)
+  {
+    switch (s0)
+    {
+    case 0:
+      x_new = XPROJECT(M_PI);
+      y_new = YPROJECT(BigNumber);
+      s_new = 1;
+      break;
+
+    case 1:
+      x_new = XPROJECT(-M_PI);
+      y_new = YPROJECT(BigNumber);
+      s_new = 2;
+      break;
+
+    case 2:
+      x_new = XPROJECT(-M_PI);
+      y_new = YPROJECT(-BigNumber);
+      s_new = 3;
+      break;
+
+    case 3:
+      x_new = XPROJECT(M_PI);
+      y_new = YPROJECT(-BigNumber);
+      s_new = 0;
+      break;
+
+    default:
+      /* keep lint happy */
+      x_new = 0;
+      y_new = 0;
+      s_new = 0;
+      assert(0);
+    }
+
+    scan(x_0, y_0, x_new, y_new);
+    x_0 = x_new;
+    y_0 = y_new;
+    s0 = s_new;
+  }
+
+  scan(x_0, y_0, x_1, y_1);
+}
+
+
+void cyl_scan_outline()
+{
+  double left, right;
+  double top, bottom;
+
+  min_y = hght;
+  max_y = -1;
+
+  left   = XPROJECT(-M_PI);
+  right  = XPROJECT(M_PI);
+  top    = YPROJECT(BigNumber);
+  bottom = YPROJECT(-BigNumber);
+
+  scan(right, top, left, top);
+  scan(left, top, left, bottom);
+  scan(left, bottom, right, bottom);
+  scan(right, bottom, right, top);
+
+  get_scanbits(64);
+}
+
+
+void cyl_scan_curves()
+{
+  int     i;
+  int     cidx;
+  int     npts;
+  int     val;
+  short  *raw;
+  double *pos;
+  double *prev;
+  double *curr;
+
+  cidx = 0;
+  raw  = map_data;
+  while (1)
+  {
+    npts = raw[0];
+    if (npts == 0) break;
+    val  = raw[1];
+    raw += 2;
+
+    pos   = cyl_extract_curve(npts, raw);
+    prev  = pos + (npts-1)*5;
+    curr  = pos;
+    min_y = hght;
+    max_y = -1;
+
+    for (i=0; i<npts; i++)
+    {
+      cyl_scan_along_curve(prev, curr, cidx);
+      prev  = curr;
+      curr += 5;
+    }
+
+    free(pos);
+    if (edgexings->count > 0)
+      cyl_handle_xings();
+    if (min_y <= max_y)
+      get_scanbits(val);
+
+    cidx += 1;
+    raw  += 3*npts;
+  }
+}
+
+
+double *cyl_extract_curve(npts, data)
+     int    npts;
+     short *data;
+{
+  int     i;
+  int     x, y, z;
+  double  scale;
+  double *pos;
+  double *rslt;
+
+  rslt = (double *) malloc((unsigned) sizeof(double) * 5 * npts);
+  assert(rslt != NULL);
+
+  x     = 0;
+  y     = 0;
+  z     = 0;
+  scale = 1.0 / MAP_DATA_SCALE;
+  pos   = rslt;
+
+  for (i=0; i<npts; i++)
+  {
+    x += data[0];
+    y += data[1];
+    z += data[2];
+
+    pos[0] = x * scale;
+    pos[1] = y * scale;
+    pos[2] = z * scale;
+
+    XFORM_ROTATE(pos, view_pos_info);
+
+    /* apply cylindrical projection
+     */
+    pos[3] = CYLINDRICAL_X(pos[0], pos[2]);
+    pos[4] = CYLINDRICAL_Y(pos[1]);
+
+    data += 3;
+    pos  += 5;
+  }
+
+  return rslt;
+}
+
+
+void cyl_scan_along_curve(prev, curr, cidx)
+     double *prev;
+     double *curr;
+     int     cidx;
+{
+  double    px, py;
+  double    cx, cy;
+  double    dx;
+  double    mx, my;
+  EdgeXing *xing;
+
+  px = prev[3];
+  cx = curr[3];
+  py = prev[4];
+  cy = curr[4];
+  dx = cx - px;
+
+  if (dx > 0)
+  {
+    /* curr to the right of prev
+     */
+
+    if (dx > ((2*M_PI) - dx))
+    {
+      /* vertical edge crossing to the left of prev
+       */
+
+      /* find exit point (left edge) */
+      mx = - M_PI;
+      my = cyl_find_edge_xing(prev, curr);
+
+      /* scan from prev to exit point */
+      scan(XPROJECT(px), YPROJECT(py), XPROJECT(mx), YPROJECT(my));
+
+      /* (mx, my) is an edge crossing (exit point) */
+      xing = (EdgeXing *) extarr_next(edgexings);
+      xing->type  = XingTypeExit;
+      xing->cidx  = cidx;
+      xing->x     = mx;
+      xing->y     = my;
+      xing->angle = 2; /* left edge */
+
+      /* scan from entry point (right edge) to curr */
+      mx = M_PI;
+      scan(XPROJECT(mx), YPROJECT(my), XPROJECT(cx), YPROJECT(cy));
+
+      /* (mx, my) is an edge crossing (entry point) */
+      xing = (EdgeXing *) extarr_next(edgexings);
+      xing->type  = XingTypeEntry;
+      xing->cidx  = cidx;
+      xing->x     = mx;
+      xing->y     = my;
+      xing->angle = 0; /* right edge */
+    }
+    else
+    {
+      /* no vertical edge crossing
+       */
+      scan(XPROJECT(px), YPROJECT(py), XPROJECT(cx), YPROJECT(cy));
+    }
+  }
+  else
+  {
+    /* curr to the left of prev
+     */
+    dx = - dx;
+
+    if (dx > ((2*M_PI) - dx))
+    {
+      /* vertical edge crossing to the right of prev
+       */
+
+      /* find exit point (right edge) */
+      mx = M_PI;
+      my = cyl_find_edge_xing(prev, curr);
+
+      /* scan from prev to exit point */
+      scan(XPROJECT(px), YPROJECT(py), XPROJECT(mx), YPROJECT(my));
+
+      /* (mx, my) is an edge crossing (exit point) */
+      xing = (EdgeXing *) extarr_next(edgexings);
+      xing->type  = XingTypeExit;
+      xing->cidx  = cidx;
+      xing->x     = mx;
+      xing->y     = my;
+      xing->angle = 0; /* right edge */
+
+      /* scan from entry point (left edge) to curr */
+      mx = - M_PI;
+      scan(XPROJECT(mx), YPROJECT(my), XPROJECT(cx), YPROJECT(cy));
+
+      /* (mx, my) is an edge crossing (entry point) */
+      xing = (EdgeXing *) extarr_next(edgexings);
+      xing->type  = XingTypeEntry;
+      xing->cidx  = cidx;
+      xing->x     = mx;
+      xing->y     = my;
+      xing->angle = 2; /* left edge */
+    }
+    else
+    {
+      /* no vertical edge crossing
+       */
+      scan(XPROJECT(px), YPROJECT(py), XPROJECT(cx), YPROJECT(cy));
+    }
+  }
+}
+
+
+double cyl_find_edge_xing(prev, curr)
+     double *prev;
+     double *curr;
+{
+  double ratio;
+  double scale;
+  double z1, z2;
+  double rslt;
+
+  if (curr[0] != 0)
+  {
+    ratio = (prev[0] / curr[0]);
+    z1 = prev[1] - (ratio * curr[1]);
+    z2 = prev[2] - (ratio * curr[2]);
+  }
+  else
+  {
+    z1 = curr[1];
+    z2 = curr[2];
+  }
+
+  scale = ((z2 > 0) ? -1 : 1) / sqrt((z1*z1) + (z2*z2));
+  z1 *= scale;
+
+  rslt = CYLINDRICAL_Y(z1);
+
+  return rslt;
+}
+
+
+void cyl_handle_xings()
+{
+  int       i;
+  int       nxings;
+  EdgeXing *xings;
+  EdgeXing *from;
+  EdgeXing *to;
+
+  xings  = (EdgeXing *) edgexings->body;
+  nxings = edgexings->count;
+
+  assert((nxings % 2) == 0);
+  qsort(xings, (unsigned) nxings, sizeof(EdgeXing), cyl_edgexing_comp);
+
+  if (xings[0].type == XingTypeExit)
+  {
+    for (i=0; i<nxings; i+=2)
+    {
+      from = &(xings[i]);
+      to   = &(xings[i+1]);
+
+      if ((from->type != XingTypeExit) ||
+          (to->type != XingTypeEntry))
+        xing_error(__FILE__, __LINE__, i, nxings, xings);
+
+      cyl_scan_edge(from, to);
+    }
+  }
+  else
+  {
+    from = &(xings[nxings-1]);
+    to   = &(xings[0]);
+
+    if ((from->type != XingTypeExit) ||
+        (to->type != XingTypeEntry) ||
+        (from->angle < to->angle))
+      xing_error(__FILE__, __LINE__, nxings-1, nxings, xings);
+
+    cyl_scan_edge(from, to);
+
+    for (i=1; i<(nxings-1); i+=2)
+    {
+      from = &(xings[i]);
+      to   = &(xings[i+1]);
+
+      if ((from->type != XingTypeExit) ||
+          (to->type != XingTypeEntry))
+        xing_error(__FILE__, __LINE__, i, nxings, xings);
+
+      cyl_scan_edge(from, to);
+    }
+  }
+
+  edgexings->count = 0;
+}
+
+
+void cyl_scan_edge(from, to)
      EdgeXing *from;
      EdgeXing *to;
 {

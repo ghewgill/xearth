@@ -1,8 +1,7 @@
-.TH xearth 1 "(not for general release)" "MIT LCS"
-.\" RCS $Id: xearth.man,v 1.24 1995/09/29 18:23:25 tuna Exp $
+.TH xearth 1 "November 1999" "KLJ"
 
 .SH NAME
-xearth - displays a shaded image of the Earth in the root window
+xearth - displays a shaded image of the Earth in an X window
 
 .SH SYNOPSIS
 .B xearth
@@ -80,6 +79,19 @@ xearth - displays a shaded image of the Earth in the root window
 .RB [ \-font
 .I font_name
 ]
+.RB [ \-root \fP|\fB \-noroot ]
+.RB [ \-geometry
+.I geom
+]
+.RB [ \-title
+.I title
+]
+.RB [ \-iconname
+.I iconname
+]
+.RB [ \-name
+.I name
+]
 .RB [ \-fork \fP|\fB \-nofork ]
 .RB [ \-once \fP|\fB \-noonce ]
 .RB [ \-nice 
@@ -102,11 +114,18 @@ updates the displayed image every five minutes. The time between
 updates can be changed with the \fB\-wait\fP option (see below);
 updates can be disabled completely by using the \fB\-once\fP option
 (see below).
-.I Xearth
-can also render directly into PPM and GIF files instead of drawing in
-the root window; see the \fB\-ppm\fP and \fB\-gif\fP options (below).
 
-This man page documents version 1.0 of
+If desired,
+.I Xearth
+can be configured to create and render into its own top-level X window
+instead of the root window; see the \fB\-root\fP, \fB\-noroot\fP, and
+\fB\-geometry\fP options (below). Finally,
+.I xearth
+can also render directly into PPM and GIF files instead of drawing
+into an X window; see the \fB\-ppm\fP and \fB\-gif\fP options
+(below).
+
+This man page documents version 1.1 of
 .I xearth.
 
 .SH OPTIONS
@@ -117,21 +136,22 @@ This man page documents version 1.0 of
 .TP
 .B \-proj \fIproj_type\fP
 Specify the projection type \fIxearth\fP should use. Supported
-projection types are \fImercator\fP and \fIorthographic\fP; these can
-either be spelled out in full or abbreviated to \fImerc\fP or
-\fIorth\fP, respectively. \fIXearth\fP uses an orthographic projection
-by default.
+projection types are \fImercator\fP, \fIorthographic\fP, and
+\fIcylindrical\fP; these can either be spelled out in full or
+abbreviated to \fImerc\fP, \fIorth\fP, or \fIcyl\fP,
+respectively. \fIXearth\fP uses an orthographic projection by
+default.
 
 .TP
 .B \-pos \fIpos_spec\fP
 Specify the position from which the Earth should be viewed. The
 \fIpos_spec\fP (position specifier) consists of a keyword, possibly
 followed by additional arguments. Valid keywords are: \fIfixed\fP,
-\fIsunrel\fP, \fIorbit\fP, and \fIrandom\fP. (If you're having
-problems getting \fIxearth\fP to accept a position specifier as a
-command line argument, make sure and read the comments about position
-specifier delimiters and using explicit quoting in the fifth paragraph
-following this one.)
+\fIsunrel\fP, \fIorbit\fP, \fImoon\fP, and \fIrandom\fP. (If you're
+having problems getting \fIxearth\fP to accept a position specifier as
+a command line argument, make sure and read the comments about
+position specifier delimiters and using explicit quoting in the sixth
+paragraph following this one.)
 
 The position specifier keyword \fIfixed\fP should be followed by two
 arguments, interpreted as numerical values indicating the latitude and
@@ -157,6 +177,10 @@ uniquely specify a single circular orbit. This problem is solved by
 limiting the space of possible orbits to those positioned over 0
 degrees latitude, 0 degrees longitude at time zero (the Un*x epoch,
 see \fBtime(3)\fP).
+
+The position specifier keyword \fImoon\fP should not be followed by
+any arguments. When this keyword is used, the viewing position is the
+current position of the moon, recalculated at each update.
 
 The position specifier keyword \fIrandom\fP should not be followed by
 any arguments. When this keyword is used, the viewing position is
@@ -196,10 +220,15 @@ the Earth is always visible).
 .TP
 .B \-rot \fIangle\fP
 Specify a rotated viewing position such that the north is not
-"straight up" in the center of the rendered image. Positive values of
-\fIangle\fP rotate the rendered image counterclockwise; negative
-values rotate the rendered image clockwise. The default value of
-\fIangle\fP is 0.
+"straight up" in the center of the rendered image. The \fIangle\fP can
+be specified either as a numeric value or the keyword \fIgalactic\fP.
+When \fIangle\fP is a numeric, it represents the number of degrees by
+which the image is to be rotated. Positive values of \fIangle\fP
+rotate the rendered image counterclockwise; negative values rotate the
+rendered image clockwise. The keyword \fIgalactic\fP orients the image
+so that the galactic north is straight up: the sun is positioned
+somewhere on the plane passing through the horizontal center of the
+screen. The default value of \fIangle\fP is 0.
 
 .TP
 .B \-sunpos \fIsun_pos_spec\fP
@@ -222,10 +251,10 @@ updates this position with the progression of time.
 Specify the magnification of the displayed image. When the
 orthographic projection is in use, the diameter of the rendered Earth
 image is \fIfactor\fP times the shorter of the width and height of the
-image (see the \fB\-size\fP option, below). For the mercator
-projection, the width of the rendered image is \fIfactor\fP times the
-width of the image (see the \fB\-size\fP option, below). The default
-magnification factor is 1.
+image (see the \fB\-size\fP option, below). For the mercator and
+cylindrical projections, the width of the rendered image is
+\fIfactor\fP times the width of the image (see the \fB\-size\fP
+option, below). The default magnification factor is 1.
 
 .TP
 .B \-size \fIsize_spec\fP
@@ -242,6 +271,10 @@ When rendering into the X root window, these values default to the
 dimensions of the root window. When producing a PPM or GIF file
 instead of drawing in the X root window (see the \fB\-ppm\fP and
 \fB\-gif\fP options, below), both values default to 512.
+
+When rendering into its own top-level X window, any values specified
+using this option are ignored; dimensions for the top-level window can
+be specified using the \fB\-geometry\fP option.
 
 .TP
 .B \-shift \fIshift_spec\fP
@@ -269,29 +302,29 @@ blue) to render land and water. Shading is enabled by default.
 .TP
 .B \-label \fP|\fB \-nolabel
 Enable/disable labeling. If labeling is enabled and \fIxearth\fP is
-rendering into the X root window, provide a label that indicates the
-current date and time and current viewing and sun positions. The
-position of the label can be controlled using the \fB\-labelpos\fP
-option (see below). Labeling is disabled by default.
+rendering into an X window, provide a label that indicates the current
+date and time and current viewing and sun positions. The position of
+the label can be controlled using the \fB\-labelpos\fP option (see
+below). Labeling is disabled by default.
 
 .TP
 .B \-labelpos \fIgeom\fP
 Specify where the label should be drawn. If labeling is enabled and
-\fIxearth\fP is rendering into the X root window, \fIgeom\fP is
-interpreted as the "position" part an X-style geometry specification
-(\fIe.g.\fP, {+-}<\fIxoffset\fP>{+-}<\fIyoffset\fP>; positive and
-negative values of \fIxoffset\fP denote offsets from the left and
-right edges of the display, respectively; positive and negative values
-of \fIyoffset\fP denote offsets from the top and bottom edges of the
-display, respectively) indicating how the label should be positioned.
-The label position defaults to "-5-5" (\fIi.e.\fP, five pixels inside
-the lower right-hand corner of the display).
+\fIxearth\fP is rendering into an X window, \fIgeom\fP is interpreted
+as the "position" part an X-style geometry specification (\fIe.g.\fP,
+{+-}<\fIxoffset\fP>{+-}<\fIyoffset\fP>; positive and negative values
+of \fIxoffset\fP denote offsets from the left and right edges of the
+display, respectively; positive and negative values of \fIyoffset\fP
+denote offsets from the top and bottom edges of the display,
+respectively) indicating how the label should be positioned.  The
+label position defaults to "-5-5" (\fIi.e.\fP, five pixels inside the
+lower right-hand corner of the display).
 
 .TP
 .B \-markers \fP|\fB \-nomarkers
 Enable/disable markers. If markers are enabled and \fIxearth\fP is
-rendering into the X root window, display small red circles and text
-labels indicating the location of interesting places on the Earth's
+rendering into an X window, display small red circles and text labels
+indicating the location of interesting places on the Earth's
 surface. Markers are enabled by default.
 
 .TP
@@ -323,11 +356,11 @@ proper. Supported alignment values are "left", "right", "above", and
 "align=right".
 
 The marker data file is reread every time \fIxearth\fP redraws an
-image into the X root window. In this way, the marker positions and
-labels can be dynamic (\fIe.g.\fP, given appropriate data sources,
-markers could be used to encode hurricane positions, where earthquakes
-have happened recently, temperatures at fixed locations, or other
-forms of "real-time" data).
+image into an X window. In this way, the marker positions and labels
+can be dynamic (\fIe.g.\fP, given appropriate data sources, markers
+could be used to encode hurricane positions, where earthquakes have
+happened recently, temperatures at fixed locations, or other forms of
+"real-time" data).
 
 \fIXearth\fP includes a built-in set of marker data for 76 major
 locations around the world. The built-in data can be selected by
@@ -422,13 +455,12 @@ value defaults to 1.
 
 .TP
 .B \-gamma \fIgamma_value\fP
-When \fIxearth\fP is rendering into the X root window, adjust the
-colors \fIxearth\fP uses by a gamma value. Values less than 1.0 yield
-darker colors; values greater than 1.0 yield brighter colors. The
-default \fIgamma_value\fP is 1.0, appropriate for use on systems with
-built-in gamma correction. For systems without built-in gamma
-correction, appropriate gamma values are often in the 2.3 to 2.6
-range.
+When \fIxearth\fP is rendering into an X window, adjust the colors
+\fIxearth\fP uses by a gamma value. Values less than 1.0 yield darker
+colors; values greater than 1.0 yield brighter colors. The default
+\fIgamma_value\fP is 1.0, appropriate for use on systems with built-in
+gamma correction. For systems without built-in gamma correction,
+appropriate gamma values are often in the 2.3 to 2.6 range.
 
 See the GAMMA-TEST file included with the \fIxearth\fP source
 distribution for information about a simple test that allows you to
@@ -437,7 +469,7 @@ directly estimate the gamma of your display system (see OBTAINING THE
 
 .TP
 .B \-wait \fIsecs\fP
-When rendering into the X root window, wait \fIsecs\fP seconds between
+When rendering into an X window, wait \fIsecs\fP seconds between
 updates. This value defaults to 300 seconds (five minutes).
 
 .TP
@@ -456,32 +488,32 @@ particular \fIfixed_time\fP (expressed in seconds since the Un*x epoch
 .TP
 .B \-onepix \fP|\fB \-twopix
 Specify whether \fIxearth\fP should use one or two pixmaps when
-rendering into the X root window. If only one pixmap is used, partial
-redraws may be visible at times in the root window (when areas of the
-root window are exposed and redrawn during the time \fIxearth\fP is
+rendering into an X window. If only one pixmap is used, partial
+redraws may be visible at times in the window (when areas of the
+window are exposed and redrawn during the time \fIxearth\fP is
 rendering the next image). If two pixmaps are used, \fIxearth\fP uses
 them to double-buffer changes such that partial redraws are (almost?)
 never seen. Using only one pixmap has the advantage of using quite a
 bit less memory in the X server; this can be important in environments
-where server-side memory is a fairly limited resource.
-Two pixmaps is the default.
+where server-side memory is a fairly limited resource. Two pixmaps is
+the default.
 
 .TP
 .B \-mono \fP|\fB \-nomono
-If rendering into the X root window, enable/disable monochrome mode.
+If rendering into an X window, enable/disable monochrome mode.
 Monochrome mode is enabled by default on systems with one-bit
 framebuffers (see the "depth of root window" information provided by
 \fBxdpyinfo(1)\fP) and disabled by default otherwise.
 
 .TP
 .B \-ncolors \fInum_colors\fP
-If rendering into the X root window or a GIF output file, specify the
-number of colors that should be used. (If markers are enabled (see
+If rendering into an X window or a GIF output file, specify the number
+of colors that should be used. (If markers are enabled (see
 \fB\-markers\fP, above), the actual number of colors used may be one
 larger than \fInum_colors\fP.) The default value of \fInum_colors\fP
 is 64.
 
-When rendering into the X root window, the maximum allowable value for
+When rendering into an X window, the maximum allowable value for
 \fInum_colors\fP is 1024. In practice, using values of
 \fInum_colors\fP larger than twice the number of distinct shades of
 red, green, or blue supported by your hardware is likely to provide
@@ -498,22 +530,56 @@ When rendering into a GIF output file, the maximum allowable value for
 
 .TP
 .B \-font \fIfont_name\fP
-If rendering into the X root window, use \fIfont_name\fP for drawing
-text labels (see \fB\-label\fP and \fB\-markers\fP, above). By
-default, \fIxearth\fP uses the "variable" font.
+If rendering into an X window, use \fIfont_name\fP for drawing text
+labels (see \fB\-label\fP and \fB\-markers\fP, above). By default,
+\fIxearth\fP uses the "variable" font.
+
+.TP
+.B \-root \fP|\fB \-noroot
+When rendering into an X window, select whether \fIxearth\fP should
+render into the X root window (\fB\-root\fP) or create and render into
+a top-level X window (\fB\-noroot\fP). By default, \fIxearth\fP
+renders into the X root window.
+
+.TP
+.B \-geometry \fIgeom\fP
+Cause \fIxearth\fP to create and render into a top-level X window with
+the specified geometry. When this option is used, the \fB\-noroot\fP
+option can be elided. Use of the \fB\-root\fP overrides the effect of
+\fB\-geometry\fP. By default (if \fB\-noroot\fP is specified by no
+geometry is provided), \fIxearth\fP uses a geometry of "512x512".
+
+.TP
+.B \-title \fItitle\fP
+When rendering into a top-level X window, this option can be used to
+specify the window title string that might be displayed by a window
+manager. By default, \fIxearth\fP uses a title of "xearth".
+
+.TP
+.B \-iconname \fIiconname\fP
+When rendering into a top-level X window, this option can be used to
+specify the icon name that might be used by a window manager for the
+window. By default, \fIxearth\fP uses an icon name of "xearth".
+
+.TP
+.B \-name \fIname\fP
+When rendering into an X window, this option can be used to specify
+the application name under which X resources are obtained, rather than
+the default executable file name. The specified name should not
+contain "." or "*" characters.
 
 .TP
 .B \-fork \fP|\fB \-nofork
-When rendering into the X root window, enable/disable forking. If
-forking is enabled, \fIxearth\fP forks a child process to handle all
-rendering calculations and screen updates (in essence, automatically
-putting itself in the background). Forking is disabled by default.
+When rendering into an X window, enable/disable forking. If forking is
+enabled, \fIxearth\fP forks a child process to handle all rendering
+calculations and screen updates (in essence, automatically putting
+itself in the background). Forking is disabled by default.
 
 .TP
 .B \-once \fP|\fB \-noonce
 Disable/enable updates. If updates are enabled and \fIxearth\fP is
-rendering into the X root window, \fIxearth\fP updates the displayed
-image periodically (the time between updates can be controlled via the
+rendering into an X window, \fIxearth\fP updates the displayed image
+periodically (the time between updates can be controlled via the
 \fB\-wait\fP option, above). If updates are disabled, \fIxearth\fP
 only renders an image once and then exits. Updates are enabled by
 default.
@@ -526,13 +592,13 @@ at the priority of the process that invoked it, usually 0.
 
 .TP
 .B \-gif
-Instead of drawing in the X root window, write a GIF file (eight-bit
-color) to standard out.
+Instead of drawing in an X window, write a GIF file (eight-bit color)
+to standard out.
 
 .TP
 .B \-ppm
-Instead of drawing in the X root window, write a PPM file (24-bit
-color) to standard out.
+Instead of drawing in an X window, write a PPM file (24-bit color) to
+standard out.
 
 .TP
 .B \-display \fIdpyname\fP
@@ -654,8 +720,8 @@ colors (see \fB\-gamma\fP, above).
 
 .TP
 .B wait \fP(integer)
-Specify the delay between updates when rendering into the X root
-window (see \fB\-wait\fP, above).
+Specify the delay between updates when rendering into an X window (see
+\fB\-wait\fP, above).
 
 .TP
 .B timewarp \fP(float)
@@ -670,19 +736,19 @@ Specify a particular fixed time that should be used to determine the
 .TP
 .B twopix \fP(boolean)
 Specify whether \fIxearth\fP should use one or two pixmaps when
-rendering into the X root window (see \fB\-onepix\fP and
-\fB\-twopix\fP, above).
+rendering into an X window (see \fB\-onepix\fP and \fB\-twopix\fP,
+above).
 
 .TP
 .B mono \fP(boolean)
 Specify whether \fIxearth\fP should use monochrome mode when rendering
-into the X root window (see \fB\-mono\fP and \fB\-nomono\fP, above).
+into an X window (see \fB\-mono\fP and \fB\-nomono\fP, above).
 
 .TP
 .B ncolors \fP(integer)
 Specify the number of colors \fIxearth\fP should use (see
 \fB\-ncolors\fP, above). The \fBncolors\fP resource is only used when
-rendering into the X root window -- the number of colors to use when
+rendering into an X window -- the number of colors to use when
 rendering into a GIF file can only be specified using the
 \fB\-ncolors\fP command line option.
 
@@ -691,14 +757,34 @@ rendering into a GIF file can only be specified using the
 Use the named font for drawing text labels (see \fB\-font\fP, above).
 
 .TP
+.B root \fP(boolean)
+Specify whether \fIxearth\fP should render into the X root window or a
+top-level X window (see \fB\-root\fP, \fB\-noroot\fP, and
+\fB\-geometry\fP, above).
+
+.TP
+.B geometry \fP(geometry)
+Specify the geometry of a top-level X window that \fIxearth\fP should
+create and render into (see \fB\-geometry\fP, above).
+
+.TP
+.B title \fP(string)
+When rendering into a top-level X window, specify the window title
+that \fIxearth\fP should use (see \fB\-title\fP, above).
+
+.TP
+.B iconname \fP(string)
+When rendering into a top-level X window, specify the icon name that
+\fIxearth\fP should use (see \fB\-iconname\fP, above).
+
+.TP
 .B fork \fP(boolean)
-When rendering into the X root window, enable/disable the automatic
-forking of a child process to handle the updates (see \fB\-fork\fP,
-above).
+When rendering into an X window, enable/disable the automatic forking
+of a child process to handle the updates (see \fB\-fork\fP, above).
 
 .TP
 .B once \fP(boolean)
-When rendering into the X root window, disable/enable updates for the
+When rendering into an X window, disable/enable updates for the
 displayed image (see \fB\-once\fP, above).
 
 .TP
@@ -709,13 +795,12 @@ Specify the priority at which the \fIxearth\fP process should be run
 .SH OBTAINING THE \fIXEARTH\fP SOURCE DISTRIBUTION
 The latest-and-greatest version of xearth should always be available
 via a link from the xearth WWW home page (URL
-http://cag-www.lcs.mit.edu/~tuna/xearth/index.html), or, for the
+http://www.cs.colorado.edu/~tuna/xearth/index.html), or, for the
 web-deprived, via anonymous ftp from cag.lcs.mit.edu in /pub/tuna.
 
 .SH NOTES
-There are a number of improvements that I'd \fIlove\fP to make to
-\fIxearth\fP, but I really should be working on my thesis instead of
-hacking on this.
+Thanks to Frank Solensky for the "-pos moon" and "-rot galactic"
+stuff.
 
 The map information used in
 .I xearth
@@ -749,7 +834,7 @@ patches. Apologies to the many people whose good ideas didn't make it
 into this release.
 
 .SH COPYRIGHT
-Copyright (C) 1989, 1990, 1993, 1994, 1995 by Kirk Lauritz Johnson
+Copyright (C) 1989, 1990, 1993-1995, 1999 by Kirk Lauritz Johnson
 
 Portions of the \fIxearth\fP source code, as marked, are:
 
@@ -794,8 +879,7 @@ PERFORMANCE OF THIS SOFTWARE.\fP
 
 .SH AUTHOR
 .nf
-  Kirk Johnson <tuna@cag.lcs.mit.edu>
-  MIT Laboratory for Computer Science
+  Kirk Johnson <tuna@indra.com>
 .fi
 
 Patches, bug reports, and suggestions are welcome, but I can't

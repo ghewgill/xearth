@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: xearth.c,v 1.26 1995/09/24 00:53:37 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -50,13 +48,13 @@
 extern int errno;
 
 #ifndef NO_SETPRIORITY
-/* apparently some systems (possibly mt.xinu 4.3bsd?) may need 
+/* apparently some systems (possibly mt.xinu 4.3bsd?) may need
  * <sys/time.h> to be included here before <sys/resource.h>.
  */
-#include <sys/resource.h>	/* for setpriority() */
+#include <sys/resource.h>       /* for setpriority() */
 #endif
 
-#define ModeX    (0)		/* possible output_mode values */
+#define ModeX    (0)            /* possible output_mode values */
 #define ModePPM  (1)
 #define ModeGIF  (2)
 #define ModeTest (3)
@@ -79,49 +77,50 @@ int  using_x _P((int, char *[]));
 void command_line _P((int, char *[]));
 
 char    *progname;              /* program name                */
-int      proj_type;		/* projection type             */
+int      proj_type;             /* projection type             */
 int      output_mode;           /* output mode (X, PPM, ...)   */
 double   view_lon;              /* viewing position longitude  */
 double   view_lat;              /* viewing position latitude   */
-double   view_rot;		/* viewing rotation (degrees)  */
-int      view_pos_type;		/* type of viewing position    */
-double   sun_rel_lon;		/* view lon, relative to sun   */
-double   sun_rel_lat;		/* view lat, relative to sun   */
-double   orbit_period;		/* orbit period (seconds)      */
-double   orbit_inclin;		/* orbit inclination (degrees) */
-double   view_mag;		/* viewing magnification       */
-int      do_shade;		/* render with shading?        */
+double   view_rot;              /* viewing rotation (degrees)  */
+int      rotate_type;           /* type of rotation            */
+int      view_pos_type;         /* type of viewing position    */
+double   sun_rel_lon;           /* view lon, relative to sun   */
+double   sun_rel_lat;           /* view lat, relative to sun   */
+double   orbit_period;          /* orbit period (seconds)      */
+double   orbit_inclin;          /* orbit inclination (degrees) */
+double   view_mag;              /* viewing magnification       */
+int      do_shade;              /* render with shading?        */
 double   sun_lon;               /* sun position longitude      */
 double   sun_lat;               /* sun position latitude       */
 int      compute_sun_pos;       /* compute sun's position?     */
 int      wdth;                  /* image width (pixels)        */
 int      hght;                  /* image height (pixels)       */
-int      shift_x;		/* image shift (x, pixels)     */
-int      shift_y;		/* image shift (y, pixels)     */
-int      do_stars;		/* show stars in background?   */
-double   star_freq;		/* frequency of stars          */
-int      big_stars;		/* percent of doublewide stars */
-int      do_grid;		/* show lon/lat grid?          */
-int      grid_big;		/* lon/lat grid line spacing   */
-int      grid_small;		/* dot spacing along grids     */
+int      shift_x;               /* image shift (x, pixels)     */
+int      shift_y;               /* image shift (y, pixels)     */
+int      do_stars;              /* show stars in background?   */
+double   star_freq;             /* frequency of stars          */
+int      big_stars;             /* percent of doublewide stars */
+int      do_grid;               /* show lon/lat grid?          */
+int      grid_big;              /* lon/lat grid line spacing   */
+int      grid_small;            /* dot spacing along grids     */
 int      do_label;              /* label image                 */
-int      do_markers;		/* display markers (X only)    */
-char    *markerfile;		/* for user-spec. marker info  */
+int      do_markers;            /* display markers (X only)    */
+char    *markerfile;            /* for user-spec. marker info  */
 int      wait_time;             /* wait time between redraw    */
-double   time_warp;		/* passage of time multiplier  */
-int      fixed_time;		/* fixed viewing time (ssue)   */
+double   time_warp;             /* passage of time multiplier  */
+int      fixed_time;            /* fixed viewing time (ssue)   */
 int      day;                   /* day side brightness (%)     */
 int      night;                 /* night side brightness (%)   */
-int      terminator;		/* terminator discontinuity, % */
-double   xgamma;		/* gamma correction (X only)   */
-int      use_two_pixmaps;	/* use two pixmaps? (X only)   */
-int      num_colors;		/* number of colors to use     */
-int      do_fork;		/* fork child process?         */
-int      priority;		/* desired process priority    */
+int      terminator;            /* terminator discontinuity, % */
+double   xgamma;                /* gamma correction (X only)   */
+int      use_two_pixmaps;       /* use two pixmaps? (X only)   */
+int      num_colors;            /* number of colors to use     */
+int      do_fork;               /* fork child process?         */
+int      priority;              /* desired process priority    */
 
 time_t start_time = 0;
 time_t current_time;
-char   errmsgbuf[1024];		/* for formatting warning/error msgs */
+char   errmsgbuf[1024];         /* for formatting warning/error msgs */
 
 
 int main(argc, argv)
@@ -263,12 +262,23 @@ void compute_positions()
   {
     pick_random_position(&view_lat, &view_lon);
   }
+  else if (view_pos_type == ViewPosTypeMoon)
+  {
+    moon_position(current_time, &view_lat, &view_lon);
+  }
+
+  /* for ViewRotGalactic, compute appropriate viewing rotation
+   */
+  if (rotate_type == ViewRotGalactic)
+  {
+    view_rot = sun_lat * sin((view_lon - sun_lon) * (M_PI / 180));
+  }
 }
 
 
 void sun_relative_position(lat_ret, lon_ret)
-     double *lat_ret;		/* (return) latitude  */
-     double *lon_ret;		/* (return) longitude */
+     double *lat_ret;           /* (return) latitude  */
+     double *lon_ret;           /* (return) longitude */
 {
   double lat, lon;
 
@@ -309,9 +319,9 @@ void sun_relative_position(lat_ret, lon_ret)
 
 
 void simple_orbit(ssue, lat, lon)
-     time_t  ssue;		/* seconds since unix epoch */
-     double *lat;		/* (return) latitude        */
-     double *lon;		/* (return) longitude       */
+     time_t  ssue;              /* seconds since unix epoch */
+     double *lat;               /* (return) latitude        */
+     double *lon;               /* (return) longitude       */
 {
   double x, y, z;
   double a, c, s;
@@ -363,8 +373,8 @@ void simple_orbit(ssue, lat, lon)
 /* pick a position (lat, lon) at random
  */
 void pick_random_position(lat_ret, lon_ret)
-     double *lat_ret;		/* (return) latitude  */
-     double *lon_ret;		/* (return) longitude */
+     double *lat_ret;           /* (return) latitude  */
+     double *lon_ret;           /* (return) longitude */
 {
   int    i;
   double pos[3];
@@ -414,8 +424,8 @@ int using_x(argc, argv)
    */
   for (i=1; i<argc; i++)
     if ((strcmp(argv[i], "-ppm") == 0) ||
-	(strcmp(argv[i], "-gif") == 0) ||
-	(strcmp(argv[i], "-test") == 0))
+        (strcmp(argv[i], "-gif") == 0) ||
+        (strcmp(argv[i], "-test") == 0))
       break;
 
   /* if we made it through the loop without finding "-ppm", "-gif", or
@@ -438,8 +448,9 @@ void set_defaults()
   sun_rel_lon      = 0;
   compute_sun_pos  = 1;
   view_rot         = 0;
-  wdth             = 512;
-  hght             = 512;
+  rotate_type      = ViewRotNorth;
+  wdth             = DefaultWdthHght;
+  hght             = DefaultWdthHght;
   shift_x          = 0;
   shift_y          = 0;
   view_mag         = 1.0;
@@ -495,9 +506,7 @@ void command_line(argc, argv)
     {
       i += 1;
       if (i >= argc) usage("missing arg to -rot");
-      sscanf(argv[i], "%lf", &view_rot);
-      if ((view_rot < -180) || (view_rot > 360))
-	fatal("viewing rotation must be between -180 and 360");
+      decode_rotation(argv[i]);
     }
     else if (strcmp(argv[i], "-sunpos") == 0)
     {
@@ -581,7 +590,7 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -starfreq");
       sscanf(argv[i], "%lf", &star_freq);
       if ((star_freq < 0) || (star_freq > 1))
-	fatal("arg to -starfreq must be between 0 and 1");
+        fatal("arg to -starfreq must be between 0 and 1");
     }
     else if (strcmp(argv[i], "-bigstars") == 0)
     {
@@ -589,7 +598,7 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -bigstars");
       sscanf(argv[i], "%d", &big_stars);
       if ((big_stars < 0) || (big_stars > 100))
-	fatal("arg to -bigstars must be between 0 and 100");
+        fatal("arg to -bigstars must be between 0 and 100");
     }
     else if (strcmp(argv[i], "-grid") == 0)
     {
@@ -605,7 +614,7 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -grid1");
       sscanf(argv[i], "%d", &grid_big);
       if (grid_big <= 0)
-	fatal("arg to -grid1 must be positive");
+        fatal("arg to -grid1 must be positive");
     }
     else if (strcmp(argv[i], "-grid2") == 0)
     {
@@ -613,7 +622,7 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -grid2");
       sscanf(argv[i], "%d", &grid_small);
       if (grid_small <= 0)
-	fatal("arg to -grid2 must be positive");
+        fatal("arg to -grid2 must be positive");
     }
     else if (strcmp(argv[i], "-day") == 0)
     {
@@ -662,7 +671,7 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -timewarp");
       sscanf(argv[i], "%lf", &time_warp);
       if (time_warp <= 0)
-	fatal("arg to -timewarp must be positive");
+        fatal("arg to -timewarp must be positive");
     }
     else if (strcmp(argv[i], "-time") == 0)
     {
@@ -702,6 +711,30 @@ void command_line(argc, argv)
       if (i >= argc) usage("missing arg to -font");
       warning("-font not relevant for GIF or PPM output");
     }
+    else if (strcmp(argv[i], "-root") == 0)
+    {
+      warning("-root not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-noroot") == 0)
+    {
+      warning("-noroot not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-geometry") == 0)
+    {
+      warning("-geometry not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-title") == 0)
+    {
+      warning("-title not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-iconname") == 0)
+    {
+      warning("-iconname not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-name") == 0)
+    {
+      warning("-name not relevant for GIF or PPM output");
+    }
     else if (strcmp(argv[i], "-fork") == 0)
     {
       do_fork = 1;
@@ -726,7 +759,7 @@ void command_line(argc, argv)
     }
     else if (strcmp(argv[i], "-version") == 0)
     {
-      version_info();
+      version_info(1);
     }
     else if (strcmp(argv[i], "-ppm") == 0)
     {
@@ -816,20 +849,20 @@ char **tokenize(s, argc_ret, msg)
       argv[argc++] = s;
 
       while (((*s) != '"') && ((*s) != '\0'))
-	s += 1;
+        s += 1;
 
       if ((*s) == '\0')
       {
-	/* oops, never found closing double quote
-	 */
-	*msg = "unterminated string (missing \")";
+        /* oops, never found closing double quote
+         */
+        *msg = "unterminated string (missing \")";
       }
       else
       {
-	/* string token terminated normally
-	 */
-	*s = '\0';
-	s += 1;
+        /* string token terminated normally
+         */
+        *s = '\0';
+        s += 1;
       }
     }
     else
@@ -839,8 +872,8 @@ char **tokenize(s, argc_ret, msg)
       argv[argc++] = s;
 
       while (NotTokenDelim(*s) &&
-	     ((*s) != '#') && ((*s) != '"') && ((*s) != '\0'))
-	s += 1;
+             ((*s) != '#') && ((*s) != '"') && ((*s) != '\0'))
+        s += 1;
     }
   }
 
@@ -849,9 +882,10 @@ char **tokenize(s, argc_ret, msg)
 }
 
 
-/* decode projection type; two possibilities:
+/* decode projection type; three possibilities:
  *  orthographic - orthographic projection (short form: orth)
  *  mercator     - mercator projection (short form: merc)
+ *  cylindrical  - cylindrical projection (short form: cyl)
  */
 void decode_proj_type(s)
      char *s;
@@ -864,6 +898,10 @@ void decode_proj_type(s)
   {
     proj_type = ProjTypeMercator;
   }
+  else if ((strcmp(s, "cylindrical") == 0) || (strcmp(s, "cyl") == 0))
+  {
+    proj_type = ProjTypeCylindrical;
+  }
   else
   {
     sprintf(errmsgbuf, "unknown projection type (%s)", s);
@@ -872,7 +910,7 @@ void decode_proj_type(s)
 }
 
 
-/* decode viewing position specifier; four possibilities:
+/* decode viewing position specifier; five possibilities:
  *
  *  fixed lat lon  - viewing position fixed wrt earth at (lat, lon)
  *
@@ -883,6 +921,8 @@ void decode_proj_type(s)
  *                   with period per and inclination inc
  *
  *  random         - random viewing position
+ *
+ *  moon           - current location of the moon
  *
  * fields can be separated with either spaces, commas, or slashes.
  */
@@ -956,8 +996,15 @@ void decode_viewing_pos(s)
   {
     if (argc != 1)
       fatal("wrong number of args in viewing position specifier");
-    
+
     view_pos_type = ViewPosTypeRandom;
+  }
+  else if (strcmp(argv[0], "moon") == 0)
+  {
+    if (argc != 1)
+      fatal("wrong number of args in viewing position specifier");
+
+    view_pos_type = ViewPosTypeMoon;
   }
   else
   {
@@ -966,6 +1013,42 @@ void decode_viewing_pos(s)
   }
 
   free(argv);
+}
+
+
+/* decode rotation; two possibilities:
+ *
+ *  <angle>  - in degrees
+ *  galactic - galactic north
+ */
+void decode_rotation(s)
+     char *s;
+{
+  int  argc;
+  char **argv;
+  const char *msg;
+
+  argv = tokenize (s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "rotation specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+  if (argc != 1)
+     fatal("wrong number of args in rotation specifier");
+
+  if (strcmp (argv[0], "galactic") == 0)
+  {
+    rotate_type = ViewRotGalactic;
+  }
+  else
+  {
+    sscanf (argv[0], "%lf", &view_rot);
+    if ((view_rot < -180) || (view_rot > 360))
+      fatal("viewing rotation must be between -180 and 360");
+  }
+
+  free (argv);
 }
 
 
@@ -1144,19 +1227,23 @@ void xearth_bzero(buf, len)
 }
 
 
-void version_info()
+void version_info(flag)
+     int flag;
 {
   fflush(stdout);
-  fprintf(stderr, "\nThis is xearth version %s.\n\n", VersionString);
-  exit(0);
+  fprintf(stderr, "\n");
+  fprintf(stderr, "This is xearth version %s.\n", VersionString);
+  fprintf(stderr, "(Home page URL: %s)\n", HomePageURL);
+  fprintf(stderr, "\n");
+
+  if (flag) exit(0);
 }
 
 
 void usage(msg)
      const char *msg;
 {
-  fflush(stdout);
-  fprintf(stderr, "\n");
+  version_info(0);
   if (msg != NULL)
     fprintf(stderr, "%s\n", msg);
   fprintf(stderr, "usage: %s\n", progname);
@@ -1169,7 +1256,8 @@ void usage(msg)
   fprintf(stderr, " [-day pct] [-night pct] [-term pct] [-gamma gamma_value]\n");
   fprintf(stderr, " [-wait secs] [-timewarp factor] [-time fixed_time]\n");
   fprintf(stderr, " [-onepix|-twopix] [-mono|-nomono] [-ncolors num_colors]\n");
-  fprintf(stderr, " [-font font_name] [-fork|-nofork] [-once|-noonce]\n");
+  fprintf(stderr, " [-font font_name] [-root|-noroot] [-geometry geom] [-title title]\n");
+  fprintf(stderr, " [-iconname iconname] [-name name] [-fork|-nofork] [-once|-noonce]\n");
   fprintf(stderr, " [-nice priority] [-gif] [-ppm] [-display dpyname] [-version]\n");
   fprintf(stderr, "\n");
   exit(1);

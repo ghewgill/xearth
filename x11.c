@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: x11.c,v 1.35 1995/09/25 01:12:41 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -50,6 +48,7 @@
 #include <X11/Intrinsic.h>
 #include <X11/Xatom.h>
 #include <X11/Xproto.h>
+#include <signal.h>
 #include "kljcpyrt.h"
 
 #define RETAIN_PROP_NAME "_XSETROOT_ID"
@@ -65,19 +64,30 @@
 #define LABEL_LEFT_FLUSH (1<<0)
 #define LABEL_TOP_FLUSH  (1<<1)
 
+static void         init_x_general _P((int, char *[]));
+static void         process_opts _P((void));
+static void         init_x_colors _P((void));
+static void         init_x_pixmaps _P((void));
+static void         init_x_root_window _P((void));
+static void         init_x_separate_window _P((void));
+static void         wakeup _P((int));
+static int          get_bits_per_pixel _P((int));
 static XFontStruct *load_x_font _P((Display *, char *));
 static void         get_proj_type _P((void));
 static void         get_viewing_position _P((void));
 static void         get_sun_position _P((void));
+static void         get_rotation _P((void));
 static void         get_size _P((void));
 static void         get_shift _P((void));
 static void         get_labelpos _P((void));
+static void         get_geometry _P((void));
 static void         x11_setup _P((void));
 static void         pack_mono_1 _P((u16or32 *, u_char *));
 static void         pack_8 _P((u16or32 *, Pixel *, u_char *));
 static void         pack_16 _P((u16or32 *, Pixel *, u_char *));
+static void         pack_24 _P((u16or32 *, Pixel *, u_char *));
 static void         pack_32 _P((u16or32 *, Pixel *, u_char *));
-static void         x11_row _P((u_char *));
+static int          x11_row _P((u_char *));
 static void         x11_cleanup _P((void));
 static void         draw_label _P((Display *));
 static void         mark_location _P((Display *, MarkerInfo *));
@@ -90,6 +100,7 @@ static void         preserveResource _P((Display *, Window));
 static void         freePrevious _P((Display *, Window));
 static int          xkill_handler _P((Display *, XErrorEvent *));
 
+static int      bpp;
 static u16or32 *dith;
 static u_char  *xbuf;
 static int      idx;
@@ -110,7 +121,7 @@ XrmDatabase  db;
 Display     *dsply;             /* display connection  */
 int          scrn;              /* screen number       */
 Window       root;              /* root window         */
-Window       vroot;             /* virtual root window */
+Window       xearth_window;     /* xearth window       */
 Colormap     cmap;              /* default colormap    */
 Visual      *visl;              /* default visual      */
 int          dpth;              /* default depth       */
@@ -124,7 +135,11 @@ XFontStruct *font;              /* basic text font     */
 
 static int   do_once;           /* only render once?   */
 static int   mono;              /* render in mono?     */
-static int   x_type;            /* type of rendering   */
+static int   use_root;          /* render into root?   */
+static int   window_pos_flag;   /* spec'ed window pos? */
+static int   window_xvalue;     /* window x position   */
+static int   window_yvalue;     /* window y position   */
+static int   window_gravity;    /* window gravity      */
 
 static int   label_xvalue;      /* label x position    */
 static int   label_yvalue;      /* label y position    */
@@ -161,6 +176,8 @@ static char *defaults[] =
   "*grid2:      15",
   "*gamma:      1.0",
   "*font:       variable",
+  "*title:      xearth",
+  "*iconname:   xearth",
   NULL
 };
 
@@ -209,6 +226,11 @@ static XrmOptionDescRec options[] =
 { "-font",        ".font",        XrmoptionSepArg, 0     },
 { "-mono",        ".mono",        XrmoptionNoArg,  "on"  },
 { "-nomono",      ".mono",        XrmoptionNoArg,  "off" },
+{ "-root",        ".root",        XrmoptionNoArg,  "on"  },
+{ "-noroot",      ".root",        XrmoptionNoArg,  "off" },
+{ "-geometry",    ".geometry",    XrmoptionSepArg, 0     },
+{ "-title",       ".title",       XrmoptionSepArg, 0     },
+{ "-iconname",    ".iconname",    XrmoptionSepArg, 0     },
 };
 
 
@@ -216,11 +238,24 @@ void command_line_x(argc, argv)
      int   argc;
      char *argv[];
 {
-  int     i;
-  XColor  xc, junk;
-  u_char *tmp;
-  double  inv_xgamma;
+  init_x_general(argc, argv);
+  process_opts();
 
+  init_x_colors();
+  init_x_pixmaps();
+  font = load_x_font(dsply, font_name);
+
+  if (use_root)
+    init_x_root_window();
+  else
+    init_x_separate_window();
+}
+
+
+static void init_x_general(argc, argv)
+     int   argc;
+     char *argv[];
+{
   progname  = argv[0];
   progclass = "XEarth";
   app_shell = XtAppInitialize(&app_context, progclass,
@@ -234,23 +269,32 @@ void command_line_x(argc, argv)
 
   XtGetApplicationNameAndClass(dsply, &progname, &progclass);
 
-  root  = RootWindow(dsply, scrn);
-  vroot = GetVRoot(dsply);
-  cmap  = DefaultColormap(dsply, scrn);
-  visl  = DefaultVisual(dsply, scrn);
-  dpth  = DefaultDepth(dsply, scrn);
+  root   = RootWindow(dsply, scrn);
+  cmap   = DefaultColormap(dsply, scrn);
+  visl   = DefaultVisual(dsply, scrn);
+  dpth   = DefaultDepth(dsply, scrn);
+  wdth   = DisplayWidth(dsply, scrn);
+  hght   = DisplayHeight(dsply, scrn);
+  white  = WhitePixel(dsply, scrn);
+  black  = BlackPixel(dsply, scrn);
+  gc     = XCreateGC(dsply, root, 0, NULL);
+  hlight = white;
+  XSetState(dsply, gc, white, black, GXcopy, AllPlanes);
 
+  bpp = get_bits_per_pixel(dpth);
+}
+
+
+static void process_opts()
+{
   if (get_boolean_resource("version", "Version"))
-    version_info();
+    version_info(1);
 
   if (get_boolean_resource("showmarkers", "Showmarkers"))
   {
     markerfile = get_string_resource("markerfile", "Markerfile");
     show_marker_info(markerfile);
   }
-
-  wdth = DisplayWidth(dsply, scrn);
-  hght = DisplayHeight(dsply, scrn);
 
   /* process complex resources
    */
@@ -260,10 +304,11 @@ void command_line_x(argc, argv)
   get_size();
   get_shift();
   get_labelpos();
+  get_rotation();
+  get_geometry();
 
   /* process simple resources
    */
-  view_rot        = get_float_resource("rot", "Rot");
   view_mag        = get_float_resource("mag", "Mag");
   do_shade        = get_boolean_resource("shade", "Shade");
   do_label        = get_boolean_resource("label", "Label");
@@ -289,12 +334,6 @@ void command_line_x(argc, argv)
   xgamma          = get_float_resource("gamma", "Gamma");
   font_name       = get_string_resource("font", "Font");
   mono            = get_boolean_resource("mono", "Mono");
-
-  /* things to add:
-   *
-   *  differentiate between label and marker fonts
-   *  allow user to specify label, marker, star, grid colors
-   */
 
   /* various sanity checks on simple resources
    */
@@ -331,62 +370,30 @@ void command_line_x(argc, argv)
   if (do_once)
     use_two_pixmaps = 0;
 
-  white = WhitePixel(dsply, scrn);
-  black = BlackPixel(dsply, scrn);
-  gc = XCreateGC(dsply, root, 0, NULL);
-  XSetState(dsply, gc, white, black, GXcopy, AllPlanes);
-  hlight = white;
+  /* if we're working with a one-bit display, force -mono mode
+   */
+  if (dpth == 1)
+    mono = 1;
+}
 
-  switch (dpth)
+
+static void init_x_colors()
+{
+  int     i;
+  XColor  xc, junk;
+  u_char *tmp;
+  double  inv_xgamma;
+
+  if (mono)
   {
-  case 1:
-    /* try to pack ximage data 1 bit/pixel */
-    x_type = MONO_1;
-    break;
-
-  case 8:
-    /* try to pack ximage data 8 bits/pixel */
-    x_type = mono ? MONO_8 : COLOR_8;
-    break;
-
-  case 12:
-  case 15:
-  case 16:
-    /* try to pack ximage data 16 bits/pixel */
-    x_type = mono ? MONO_16 : COLOR_16;
-    break;
-
-  case 24:
-    /* try to pack ximage data 32 bits/pixel */
-    x_type = mono ? MONO_32 : COLOR_32;
-    break;
-
-  default:
-    fflush(stdout);
-    fprintf(stderr,
-            "xearth %s: fatal - unsupported display depth %d\n",
-            VersionString, dpth);
-    fprintf(stderr,
-            "  (supported depths: 1, 8, 15, 16, and 24 bits)\n");
-    exit(1);
-  }
-
-  switch (x_type)
-  {
-  case MONO_1:
-  case MONO_8:
-  case MONO_16:
-  case MONO_32:
     mono_dither_setup();
     pels = (Pixel *) malloc((unsigned) sizeof(Pixel) * 2);
     assert(pels != NULL);
     pels[0] = black;
     pels[1] = white;
-    break;
-
-  case COLOR_8:
-  case COLOR_16:
-  case COLOR_32:
+  }
+  else
+  {
     if (XAllocNamedColor(dsply, cmap, "red", &xc, &junk) != 0)
       hlight = xc.pixel;
 
@@ -408,25 +415,29 @@ void command_line_x(argc, argv)
 
       tmp += 3;
     }
-    break;
-
-  default:
-    assert(0);
   }
+}
 
+
+static void init_x_pixmaps()
+{
   work_pix = XCreatePixmap(dsply, root, (unsigned) wdth,
                            (unsigned) hght, (unsigned) dpth);
   if (use_two_pixmaps)
     disp_pix = XCreatePixmap(dsply, root, (unsigned) wdth,
                              (unsigned) hght, (unsigned) dpth);
+}
 
-  font = load_x_font(dsply, font_name);
+
+static void init_x_root_window()
+{
+  xearth_window = GetVRoot(dsply);
 
   /* try to free any resources retained by any previous clients that
    * scribbled in the root window (also deletes the _XSETROOT_ID
    * property from the root window, if it was there)
    */
-  freePrevious(dsply, vroot);
+  freePrevious(dsply, xearth_window);
 
   /* 18 may 1994
    *
@@ -467,7 +478,60 @@ void command_line_x(argc, argv)
    * figure out a fix to the problems described above, probably best
    * not to bother.
    */
-  /* preserveResource(dsply, vroot); */
+  /* preserveResource(dsply, xearth_window); */
+}
+
+
+static void init_x_separate_window()
+{
+  XSizeHints *xsh;
+  char       *title;
+  char       *iname;
+
+  xearth_window = XCreateSimpleWindow(dsply,
+                                      root,
+                                      window_xvalue,
+                                      window_yvalue,
+                                      wdth,
+                                      hght,
+                                      DefaultBorderWidth,
+                                      white,
+                                      black);
+
+  xsh = XAllocSizeHints();
+  xsh->width       = wdth;
+  xsh->height      = hght;
+  xsh->min_width   = wdth;
+  xsh->min_height  = hght;
+  xsh->max_width   = wdth;
+  xsh->max_height  = hght;
+  xsh->base_width  = wdth;
+  xsh->base_height = hght;
+  xsh->flags       = (PSize|PMinSize|PMaxSize|PBaseSize);
+
+  if (window_pos_flag)
+  {
+    xsh->x           = window_xvalue;
+    xsh->y           = window_yvalue;
+    xsh->win_gravity = window_gravity;
+    xsh->flags |= (USPosition|PWinGravity);
+  }
+
+  title = get_string_resource("title", "Title");
+  iname = get_string_resource("iconname", "Iconname");
+  if ((title == NULL) || (iname == NULL))
+    fatal("title or iconname is NULL (this shouldn't happen)");
+
+  XSetWMNormalHints(dsply, xearth_window, xsh);
+  XStoreName(dsply, xearth_window, title);
+  XSetIconName(dsply, xearth_window, iname);
+
+  XMapRaised(dsply, xearth_window);
+  XSync(dsply, False);
+
+  XFree((char *) xsh);
+  free(title);
+  free(iname);
 }
 
 
@@ -494,15 +558,70 @@ void x11_output()
 
     if (do_once)
     {
-      preserveResource(dsply, vroot);
+      if (use_root)
+        preserveResource(dsply, xearth_window);
       XSync(dsply, True);
       return;
     }
 
-    /* sleep for designated wait_time
+    /* schedule an alarm for wait_time seconds and pause. alarm() and
+     * pause() are used instead of sleep so that if xearth is sent a
+     * SIGSTOP and SIGCONT separated by more than wait_time, it will
+     * refresh the screen as soon as the SIGCONT is received. this
+     * facilitates graceful interaction with things like FvwmBacker.
+     * (thanks to Richard Everson for passing this along.)
      */
-    sleep((unsigned) wait_time);
+    signal(SIGALRM, wakeup);
+    signal(SIGCONT, wakeup);
+    if (wait_time > 0)
+    {
+      /* only do the alarm()/pause() stuff if wait_time is non-zero,
+       * else alarm() will not behave as desired.
+       */
+      alarm(wait_time);
+      pause();
+    }
   }
+}
+
+
+/* no-op signal handler for catching SIGALRM and SIGCONT
+ * (used to wake up from pause() system call)
+ */
+static void wakeup(int junk)
+{
+  /* nothing */
+}
+
+
+/* determine bits_per_pixel value for pixmaps of specified depth
+ */
+static int get_bits_per_pixel(depth)
+     int depth;
+{
+  int                  i;
+  int                  cnt;
+  XPixmapFormatValues *pmf;
+  int                  rslt;
+
+  pmf = XListPixmapFormats(dsply, &cnt);
+  if (pmf == NULL)
+    fatal("unable to get pixmap format list");
+
+  rslt = 0;
+  for (i=0; i<cnt; i++)
+    if (pmf[i].depth == depth)
+    {
+      rslt = pmf[i].bits_per_pixel;
+      break;
+    }
+
+  if (rslt == 0)
+    fatal("unable to determine pixmap format");
+
+  XFree(pmf);
+
+  return rslt;
 }
 
 
@@ -575,6 +694,21 @@ static void get_sun_position()
 }
 
 
+/* fetch and decode 'rot' resource (rotation specifier)
+ */
+static void get_rotation()
+{
+  char *res;
+
+  res = get_string_resource("rot", "Rotation");
+  if (res != NULL)
+  {
+    decode_rotation(res);
+    free(res);
+  }
+}
+
+
 /* fetch and decode 'size' resource (size specifier)
  */
 static void get_size()
@@ -631,25 +765,14 @@ static void get_labelpos()
 
     if ((mask & XValue) && (mask & YValue))
     {
-      if (mask & XNegative)
-      {
-        label_xvalue = wdth + x;
-      }
-      else
-      {
-        label_xvalue  = x;
-        label_orient |= LABEL_LEFT_FLUSH;
-      }
+      label_xvalue = x;
+      label_yvalue = y;
 
-      if (mask & YNegative)
-      {
-        label_yvalue = hght + y;
-      }
-      else
-      {
-        label_yvalue  = y;
+      if ((mask & XNegative) == 0)
+        label_orient |= LABEL_LEFT_FLUSH;
+
+      if ((mask & YNegative) == 0)
         label_orient |= LABEL_TOP_FLUSH;
-      }
     }
     else
     {
@@ -661,48 +784,164 @@ static void get_labelpos()
 }
 
 
+/* fetch and decode 'root' and 'geometry' resource (whether to render
+ * into root or separate window; if separate window, position of that
+ * window) [this is pretty ugly code, but it gets the job done ...]
+ */
+static void get_geometry()
+{
+  int   check_geom;
+  char *res;
+  int   mask;
+  int   x, y;
+  int   w, h;
+
+  res = get_string_resource("root", "Root");
+  if (res != NULL)
+  {
+    free(res);
+    if (get_boolean_resource("root", "Root"))
+    {
+      /* user specified -root; render into the root window
+       * (ignore any -geometry, if provided)
+       */
+      use_root   = 1;
+      check_geom = 0;
+    }
+    else
+    {
+      /* user specified -noroot; render into separate window
+       */
+      use_root   = 0;
+      check_geom = 1;
+    }
+  }
+  else
+  {
+    /* user specified neither -root nor -noroot; if -geometry is
+     * provided, render into separate window, else render into root
+     */
+    use_root   = 1;
+    check_geom = 1;
+  }
+
+  /* if check_geom isn't set, nothing more to do
+   */
+  if (check_geom == 0) return;
+
+  /* look for -geometry and try to make sense of it
+   */
+  res = get_string_resource("geometry", "Geometry");
+  if (res != NULL)
+  {
+    /* if -geometry is specified, assume -noroot and set default width
+     * and height (which get overridden by -geometry width and height,
+     * if provided)
+     */
+    use_root = 0;
+    wdth     = DefaultWdthHght;
+    hght     = DefaultWdthHght;
+
+    mask = XParseGeometry(res, &x, &y, &w, &h);
+
+    /* extract width and height information
+     */
+    if ((mask & WidthValue) && (mask & HeightValue))
+    {
+      wdth = w;
+      hght = h;
+    }
+    else
+    {
+      if ((mask & WidthValue) || (mask & HeightValue))
+        warning("geometry must specify both width and height");
+    }
+
+    /* extract position information
+     */
+    if ((mask & XValue) && (mask & YValue))
+    {
+      window_pos_flag = 1;
+      window_xvalue   = x;
+      window_yvalue   = y;
+
+      if (mask & XNegative)
+      {
+        window_xvalue += (DisplayWidth(dsply, scrn) - wdth);
+        window_xvalue -= (2 * DefaultBorderWidth);
+      }
+
+      if (mask & YNegative)
+      {
+        window_yvalue += (DisplayHeight(dsply, scrn) - hght);
+        window_yvalue -= (2 * DefaultBorderWidth);
+      }
+
+      if (mask & XNegative)
+        if (mask & YNegative)
+          window_gravity = SouthEastGravity;
+        else
+          window_gravity = NorthEastGravity;
+      else
+        if (mask & YNegative)
+          window_gravity = SouthWestGravity;
+        else
+          window_gravity = NorthWestGravity;
+    }
+    else
+    {
+      if ((mask & XValue) || (mask & YValue))
+        warning("geometry must specify both x and y offsets");
+
+      window_pos_flag = 0;
+      window_xvalue   = 0;
+      window_yvalue   = 0;
+      window_gravity  = 0;
+    }
+
+    free(res);
+  }
+  else if (use_root == 0)
+  {
+    /* if -noroot was specified but no -geometry was provided, assume
+     * defaults
+     */
+    wdth            = DefaultWdthHght;
+    hght            = DefaultWdthHght;
+    window_pos_flag = 0;
+    window_xvalue   = 0;
+    window_yvalue   = 0;
+  }
+}
+
+
 static void x11_setup()
 {
-  int dith_size;
-  int xbuf_size;
-  int bits_per_pixel;
+  unsigned dith_size;
+  unsigned xbuf_size;
 
-  switch (x_type)
+  switch (bpp)
   {
-  case MONO_1:
-    dith_size      = wdth + 7;
-    xbuf_size      = dith_size >> 3;
-    bits_per_pixel = 1;
+  case 1:
+    dith_size = wdth + 7;
     break;
 
-  case MONO_8:
-  case COLOR_8:
-    dith_size      = wdth;
-    xbuf_size      = dith_size;
-    bits_per_pixel = 8;
-    break;
-
-  case MONO_16:
-  case COLOR_16:
-    dith_size      = wdth;
-    xbuf_size      = dith_size * 2;
-    bits_per_pixel = 16;
-    break;
-
-  case MONO_32:
-  case COLOR_32:
-    dith_size      = wdth;
-    xbuf_size      = dith_size * 4;
-    bits_per_pixel = 32;
+  case 8:
+  case 16:
+  case 24:
+  case 32:
+    dith_size = wdth;
     break;
 
   default:
-    /* keep lint happy */
-    dith_size      = 0;
-    xbuf_size      = 0;
-    bits_per_pixel = 0;
-    assert(0);
+    dith_size = 0; /* keep lint happy */
+    fprintf(stderr,
+            "xearth %s: fatal - unsupported pixmap format (%d bits/pixel)\n",
+            VersionString, bpp);
+    exit(1);
   }
+
+  xbuf_size = (dith_size * bpp) >> 3;
 
   dith = (u16or32 *) malloc((unsigned) sizeof(u16or32) * dith_size);
   assert(dith != NULL);
@@ -714,19 +953,18 @@ static void x11_setup()
                      (char *) xbuf, (unsigned) wdth, 1, 8,
                      xbuf_size);
 
-  if (xim->bits_per_pixel != bits_per_pixel)
+  if (xim->bits_per_pixel != bpp)
   {
-    fflush(stdout);
     fprintf(stderr,
             "xearth %s: fatal - unexpected bits/pixel for depth %d\n",
             VersionString, dpth);
     fprintf(stderr,
             "  (expected %d bits/pixel, actual value is %d)\n",
-            bits_per_pixel, xim->bits_per_pixel);
+            bpp, xim->bits_per_pixel);
     exit(1);
   }
 
-  if (x_type == MONO_1)
+  if (bpp == 1)
   {
     /* force MSBFirst bitmap_bit_order and byte_order
      */
@@ -817,6 +1055,43 @@ static void pack_16(src, map, dst)
 }
 
 
+/* pack pixels into ximage format (assuming bits_per_pixel == 24)
+ */
+static void pack_24(src, map, dst)
+     u16or32 *src;
+     Pixel   *map;
+     u_char  *dst;
+{
+  int      i, i_lim;
+  unsigned val;
+
+  i_lim = wdth;
+
+  if (xim->byte_order == MSBFirst)
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = (val >> 16) & 0xff;
+      dst[1] = (val >> 8) & 0xff;
+      dst[2] = val & 0xff;
+      dst   += 3;
+    }
+  }
+  else /* (xim->byte_order == LSBFirst) */
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = val & 0xff;
+      dst[1] = (val >> 8) & 0xff;
+      dst[2] = (val >> 16) & 0xff;
+      dst   += 3;
+    }
+  }
+}
+
+
 /* pack pixels into ximage format (assuming bits_per_pixel == 32)
  */
 static void pack_32(src, map, dst)
@@ -856,52 +1131,47 @@ static void pack_32(src, map, dst)
 }
 
 
-static void x11_row(row)
+static int x11_row(row)
      u_char *row;
 {
-  switch (x_type)
-  {
-  case MONO_1:
+  if (mono)
     mono_dither_row(row, dith);
+  else
+    dither_row(row, dith);
+
+  switch (bpp)
+  {
+  case 1:
     pack_mono_1(dith, xbuf);
     break;
 
-  case MONO_8:
-    mono_dither_row(row, dith);
+  case 8:
     pack_8(dith, pels, xbuf);
     break;
 
-  case MONO_16:
-    mono_dither_row(row, dith);
+  case 16:
     pack_16(dith, pels, xbuf);
     break;
 
-  case MONO_32:
-    mono_dither_row(row, dith);
-    pack_32(dith, pels, xbuf);
+  case 24:
+    pack_24(dith, pels, xbuf);
     break;
 
-  case COLOR_8:
-    dither_row(row, dith);
-    pack_8(dith, pels, xbuf);
-    break;
-
-  case COLOR_16:
-    dither_row(row, dith);
-    pack_16(dith, pels, xbuf);
-    break;
-
-  case COLOR_32:
-    dither_row(row, dith);
+  case 32:
     pack_32(dith, pels, xbuf);
     break;
 
   default:
-    assert(0);
+    fprintf(stderr,
+            "xearth %s: fatal - unsupported pixmap format (%d bits/pixel)\n",
+            VersionString, bpp);
+    exit(1);
   }
 
   XPutImage(dsply, work_pix, gc, xim, 0, 0, 0, idx, (unsigned) wdth, 1);
   idx += 1;
+
+  return 0;
 }
 
 
@@ -928,8 +1198,8 @@ static void x11_cleanup()
 
   if (do_label) draw_label(dpy);
 
-  XSetWindowBackgroundPixmap(dpy, vroot, work_pix);
-  XClearWindow(dpy, vroot);
+  XSetWindowBackgroundPixmap(dpy, xearth_window, work_pix);
+  XClearWindow(dpy, xearth_window);
   XSync(dpy, True);
 
   if (use_two_pixmaps)
@@ -961,7 +1231,7 @@ static void draw_label(dpy)
   }
   else
   {
-    y = label_yvalue - font->descent;
+    y = (hght + label_yvalue) - font->descent;
 #ifdef DEBUG
     y -= 3 * dy;                /* 4 lines of text */
 #else
@@ -977,7 +1247,7 @@ static void draw_label(dpy)
   if (label_orient & LABEL_LEFT_FLUSH)
     x = label_xvalue - extents.lbearing;
   else
-    x = label_xvalue - extents.rbearing;
+    x = (wdth + label_xvalue) - extents.rbearing;
   draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
   y += dy;
 #endif /* DEBUG */
@@ -988,7 +1258,7 @@ static void draw_label(dpy)
   if (label_orient & LABEL_LEFT_FLUSH)
     x = label_xvalue - extents.lbearing;
   else
-    x = label_xvalue - extents.rbearing;
+    x = (wdth + label_xvalue) - extents.rbearing;
   draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
   y += dy;
 
@@ -1000,7 +1270,7 @@ static void draw_label(dpy)
   if (label_orient & LABEL_LEFT_FLUSH)
     x = label_xvalue - extents.lbearing;
   else
-    x = label_xvalue - extents.rbearing;
+    x = (wdth + label_xvalue) - extents.rbearing;
   draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
   y += dy;
 
@@ -1012,7 +1282,7 @@ static void draw_label(dpy)
   if (label_orient & LABEL_LEFT_FLUSH)
     x = label_xvalue - extents.lbearing;
   else
-    x = label_xvalue - extents.rbearing;
+    x = (wdth + label_xvalue) - extents.rbearing;
   draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
   y += dy;
 }
@@ -1047,12 +1317,19 @@ static void mark_location(dpy, info)
      */
     if (pos[2] <= 0) return;
   }
-  else /* (proj_type == ProjTypeMercator) */
+  else if (proj_type == ProjTypeMercator)
   {
     /* apply mercator projection
      */
     pos[0] = MERCATOR_X(pos[0], pos[2]);
     pos[1] = MERCATOR_Y(pos[1]);
+  }
+  else /* (proj_type == ProjTypeCylindrical) */
+  {
+    /* apply cylindrical projection
+     */
+    pos[0] = CYLINDRICAL_X(pos[0], pos[2]);
+    pos[1] = CYLINDRICAL_Y(pos[1]);
   }
 
   x = XPROJECT(pos[0]);

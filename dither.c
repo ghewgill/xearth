@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: dither.c,v 1.18 1995/09/25 01:09:14 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost

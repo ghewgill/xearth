@@ -3,8 +3,6 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: mapdata.c,v 1.6 1995/09/09 05:33:38 tuna Exp $
- *
  * map_data[] is a big array of short (16-bit) ints, as follows:
  *
  * - the map_data[] info is a sequence of closed curves
@@ -31,7 +29,7 @@
  *
  * the curves are sampled at a (roughly) a 20 mile resolution.
  *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost

@@ -1,8 +1,24 @@
-RCS $Id: HISTORY,v 1.10 1995/09/29 18:16:30 tuna Exp $
+Release history for xearth, version 1.1
+Kirk Lauritz Johnson <tuna@indra.com>
+6 November 1999
 
-Release history for xearth, version 1.0
-Kirk Lauritz Johnson <tuna@cag.lcs.mit.edu>
-29 September 1995
+
+xearth version 1.1 (6 November 1999)
+
+  Finalize some changes that I've been sitting on for a few years;
+  integrate some contributed code. New features:
+
+  - new position specifier (moon)
+  - new rotation specifier (galactic)
+  - cylindrical projections (-proj cyl)
+  - support for "real" 24-bit displays
+  - support for running xearth it its own top-level window (-noroot,
+    -geometry)
+
+  Plus miscellaneous code cleanup.
+
+  "moon" and "galactic" changes are courtesy of Frank T. Solensky
+  <solensky@TopLayer.com>.
 
 
 xearth version 1.0 (29 September 1995)
@@ -60,8 +76,8 @@ xearth version 0.91 (25 May 1994)
   Fixed and uncommented the code that tries to kill the resources of
   any previous clients that had scribbled on the root window and left
   an _XSETROOT_ID property. (Note that xearth still doesn't set an
-  _XSETROOT_ID property itself; see the big comment near line 380 of
-  x11.c for details.)
+  _XSETROOT_ID property itself; see the big comment about _XSETROOT_ID
+  in x11.c for details.)
 
   Minor performance tweaks and a few bug fixes in the dithering code.
 
@@ -89,7 +105,7 @@ xearth version 0.5 (23 July 1993)
 
 ----------------------------------------------------------------
 
-Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
 
 Parts of the source code (as marked) are:
   Copyright (C) 1989, 1990, 1991 by Jim Frost

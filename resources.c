@@ -2,8 +2,6 @@
  * resources.c
  * march 1994
  *
- * RCS $Id: resources.c,v 1.7 1995/09/24 00:48:31 tuna Exp $
- *
  * this file is copied essentially verbatim from the sources for Jamie
  * Zawinski's xscreensaver package; his original copyright notice
  * follows this comment.

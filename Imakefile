@@ -1,7 +1,6 @@
 XCOMM Imakefile for xearth
-XCOMM RCS $Id: Imakefile,v 1.9 1995/08/30 21:40:29 tuna Exp $
 XCOMM
-XCOMM Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+XCOMM Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
 XCOMM
 XCOMM Parts of the source code (as marked) are:
 XCOMM   Copyright (C) 1989, 1990, 1991 by Jim Frost

@@ -3,9 +3,7 @@
  * kirk johnson
  * october 1993
  *
- * RCS $Id: render.c,v 1.20 1995/09/25 01:10:37 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -59,6 +57,7 @@ static void compute_sun_vector _P((double *));
 static void orth_compute_inv_x _P((double *));
 static void orth_shade_row _P((int, s8or32 *, double *, double *, u_char *));
 static void merc_shade_row _P((int, s8or32 *, double *, u_char *));
+static void cyl_shade_row _P((int, s8or32 *, double *, u_char *));
 
 static int      scanbitcnt;
 static ScanBit *scanbit;
@@ -251,23 +250,28 @@ static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
      u_char *rslt;
 {
   int    i, i_lim;
+  int    scanbuf_val;
   int    val;
   double x, y, z;
   double scale;
   double tmp;
+  double y_sol_1;
 
   y = INV_YPROJECT(idx);
 
   /* save a little computation in the inner loop
    */
-  tmp = 1 - (y*y);
+  tmp     = 1 - (y*y);
+  y_sol_1 = y * sol[1];
 
   /* use i_lim to encourage compilers to register loop limit
    */
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
   {
-    switch (scanbuf[i])
+    scanbuf_val = scanbuf[i];
+
+    switch (scanbuf_val)
     {
     case PixTypeSpace:        /* black */
       rslt[0] = 0;
@@ -288,7 +292,7 @@ static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
       x = inv_x[i];
       z = tmp - (x*x);
       z = SQRT(z);
-      scale = x*sol[0] + y*sol[1] + z*sol[2];
+      scale = (x * sol[0]) + y_sol_1 + (z * sol[2]);
       if (scale < 0)
       {
 	val = night_val;
@@ -302,7 +306,7 @@ static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
 	  assert(val >= 0);
       }
 
-      if (scanbuf[i] == PixTypeLand)
+      if (scanbuf_val == PixTypeLand)
       {
 	/* land (green) */
 	rslt[0] = 0;
@@ -334,12 +338,14 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
      u_char *rslt;
 {
   int    i, i_lim;
+  int    scanbuf_val;
   int    val;
   double x, y, z;
   double sin_theta;
   double cos_theta;
   double scale;
   double tmp;
+  double y_sol_1;
 
   y = INV_YPROJECT(idx);
   y = INV_MERCATOR_Y(y);
@@ -364,16 +370,22 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
   /* compute rotation coefficients used
    * to find subsequent (x, z) values
    */
-  tmp = inv_proj_scale;
+  tmp = proj_info.inv_proj_scale;
   sin_theta = sin(tmp);
   cos_theta = cos(tmp);
+
+  /* save a little computation in the inner loop
+   */
+  y_sol_1 = y * sol[1];
 
   /* use i_lim to encourage compilers to register loop limit
    */
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
   {
-    switch (scanbuf[i])
+    scanbuf_val = scanbuf[i];
+
+    switch (scanbuf_val)
     {
     case PixTypeSpace:        /* black */
       rslt[0] = 0;
@@ -391,7 +403,7 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
 
     case PixTypeLand:         /* green, blue */
     case PixTypeWater:
-      scale = x*sol[0] + y*sol[1] + z*sol[2];
+      scale = (x * sol[0]) + y_sol_1 + (z * sol[2]);
       if (scale < 0)
       {
 	val = night_val;
@@ -405,7 +417,124 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
 	  assert(val >= 0);
       }
 
-      if (scanbuf[i] == PixTypeLand)
+      if (scanbuf_val == PixTypeLand)
+      {
+	/* land (green) */
+	rslt[0] = 0;
+	rslt[1] = val;
+	rslt[2] = 0;
+      }
+      else
+      {
+	/* water (blue) */
+	rslt[0] = 0;
+	rslt[1] = 0;
+	rslt[2] = val;
+      }
+      break;
+
+    default:
+      assert(0);
+    }
+
+    /* compute next (x, z) values via 2-d rotation
+     */
+    tmp = (cos_theta * z) - (sin_theta * x);
+    x   = (sin_theta * z) + (cos_theta * x);
+    z   = tmp;
+
+    rslt += 3;
+  }
+}
+
+
+static void cyl_shade_row(idx, scanbuf, sol, rslt)
+     int     idx;
+     s8or32 *scanbuf;
+     double *sol;
+     u_char *rslt;
+{
+  int    i, i_lim;
+  int    scanbuf_val;
+  int    val;
+  double x, y, z;
+  double sin_theta;
+  double cos_theta;
+  double scale;
+  double tmp;
+  double y_sol_1;
+
+  y = INV_YPROJECT(idx);
+  y = INV_CYLINDRICAL_Y(y);
+
+  /* conceptually, on each iteration of the i loop, we want:
+   *
+   *   x = sin(INV_XPROJECT(i)) * sqrt(1 - (y*y));
+   *   z = cos(INV_XPROJECT(i)) * sqrt(1 - (y*y));
+   *
+   * computing this directly is rather expensive, however, so we only
+   * compute the first (i=0) pair of values directly; all other pairs
+   * (i>0) are obtained through successive rotations of the original
+   * pair (by inv_proj_scale radians).
+   */
+
+  /* compute initial (x, z) values
+   */
+  tmp = sqrt(1 - (y*y));
+  x   = sin(INV_XPROJECT(0)) * tmp;
+  z   = cos(INV_XPROJECT(0)) * tmp;
+
+  /* compute rotation coefficients used
+   * to find subsequent (x, z) values
+   */
+  tmp = proj_info.inv_proj_scale;
+  sin_theta = sin(tmp);
+  cos_theta = cos(tmp);
+
+  /* save a little computation in the inner loop
+   */
+  y_sol_1 = y * sol[1];
+
+  /* use i_lim to encourage compilers to register loop limit
+   */
+  i_lim = wdth;
+  for (i=0; i<i_lim; i++)
+  {
+    scanbuf_val = scanbuf[i];
+
+    switch (scanbuf_val)
+    {
+    case PixTypeSpace:        /* black */
+      rslt[0] = 0;
+      rslt[1] = 0;
+      rslt[2] = 0;
+      break;
+
+    case PixTypeStar:         /* white */
+    case PixTypeGridLand:
+    case PixTypeGridWater:
+      rslt[0] = 255;
+      rslt[1] = 255;
+      rslt[2] = 255;
+      break;
+
+    case PixTypeLand:         /* green, blue */
+    case PixTypeWater:
+      scale = (x * sol[0]) + y_sol_1 + (z * sol[2]);
+      if (scale < 0)
+      {
+	val = night_val;
+      }
+      else
+      {
+	val = day_val_base + (scale * day_val_delta);
+	if (val > 255)
+	  val = 255;
+	else
+	  assert(val >= 0);
+      }
+
+      if (scanbuf_val == PixTypeLand)
       {
 	/* land (green) */
 	rslt[0] = 0;
@@ -437,7 +566,7 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
 
 
 void render(rowfunc)
-     void (*rowfunc) _P((u_char *));
+     int (*rowfunc) _P((u_char *));
 {
   int     i, i_lim;
   s8or32 *scanbuf;
@@ -486,8 +615,10 @@ void render(rowfunc)
       no_shade_row(scanbuf, row);
     else if (proj_type == ProjTypeOrthographic)
       orth_shade_row(i, scanbuf, sol, inv_x, row);
-    else
+    else if (proj_type == ProjTypeMercator)
       merc_shade_row(i, scanbuf, sol, row);
+    else /* (proj_type == ProjTypeCylindrical) */
+      cyl_shade_row(i, scanbuf, sol, row);
 
     rowfunc(row);
   }
@@ -618,12 +749,19 @@ static void new_grid_dot(cs_lat, cs_lon)
      */
     if (pos[2] <= 0) return;
   }
-  else /* (proj_type == ProjTypeMercator) */
+  else if (proj_type == ProjTypeMercator)
   {
     /* apply mercator projection
      */
     pos[0] = MERCATOR_X(pos[0], pos[2]);
     pos[1] = MERCATOR_Y(pos[1]);
+  }
+  else /* (proj_type == ProjTypeCylindrical) */
+  {
+    /* apply cylindrical projection
+     */
+    pos[0] = CYLINDRICAL_X(pos[0], pos[2]);
+    pos[1] = CYLINDRICAL_Y(pos[1]);
   }
 
   x = XPROJECT(pos[0]);

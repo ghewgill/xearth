@@ -2,9 +2,7 @@
 #define _KLJ_COPYRIGHT_
 
 /*
- * RCS $Id: kljcpyrt.h,v 1.8 1995/09/24 00:44:18 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -45,6 +43,6 @@
  */
 
 static const char *Copyright =
- "Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson";
+ "Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson";
 
 #endif

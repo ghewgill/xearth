@@ -3,9 +3,7 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: xearth.h,v 1.28 1995/09/29 18:12:30 tuna Exp $
- *
- * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
@@ -58,7 +56,8 @@
 #include "extarr.h"
 #include "kljcpyrt.h"
 
-#define VersionString "1.0"
+#define VersionString "1.1"
+#define HomePageURL   "http://www.cs.colorado.edu/~tuna/xearth/index.html"
 
 /* if NO_RANDOM is defined, use lrand48() and srand48() 
  * instead of random() and srandom()
@@ -80,6 +79,14 @@
  */
 #define EarthPeriod (86400)
 
+/* default width and height, if not otherwise specified
+ */
+#define DefaultWdthHght (512)
+
+/* default border width, if not otherwise specified
+ */
+#define DefaultBorderWidth (1)
+
 /* types of pixels
  */
 #define PixTypeSpace     (0)
@@ -100,11 +107,18 @@
 #define ViewPosTypeSun    (1)
 #define ViewPosTypeOrbit  (2)
 #define ViewPosTypeRandom (3)
+#define ViewPosTypeMoon   (4)
+
+/* types of viewing rotations
+ */
+#define ViewRotNorth    (0)
+#define ViewRotGalactic (1)
 
 /* types of projections
  */
 #define ProjTypeOrthographic (0)
 #define ProjTypeMercator     (1)
+#define ProjTypeCylindrical  (2)
 
 /* types of marker label alignment
  */
@@ -144,19 +158,31 @@
  } while (0)
 
 /* mercator projection (xyz->xy)
+ * [the argument to MERCATOR_Y() is thresholded against 0.9999999999
+ * and -0.9999999999 instead of 1.0 and -1.0 to avoid numerical
+ * difficulties that can arise when the argument of tan() gets close
+ * to PI/2; thanks to Bill Leonard for helping debug this.]
  */
 #define MERCATOR_X(x, z)  (atan2((x), (z)))
-#define MERCATOR_Y(y)     (((y) >= 1) ? (BigNumber)      \
-			   : (((y) <= -1) ? (-BigNumber) \
-			      : log(tan((asin(y)/2) + (M_PI/4)))))
+#define MERCATOR_Y(y)     (((y) >= 0.9999999999) ? (BigNumber)      \
+                           : (((y) <= -0.9999999999) ? (-BigNumber) \
+                              : log(tan((asin(y)/2) + (M_PI/4)))))
 #define INV_MERCATOR_Y(y) (sin(2 * (atan(exp(y)) - (M_PI/4))))
+
+/* cylindrical projection (xyz->xy)
+ */
+#define CYLINDRICAL_X(x, z) (atan2((x), (z)))
+#define CYLINDRICAL_Y(y)    (((y) >= 0.9999999999) ? (BigNumber)      \
+			     : (((y) <= -0.9999999999) ? (-BigNumber) \
+				: (tan(asin(y)))))
+#define INV_CYLINDRICAL_Y(y) (sin(atan(y)))
 
 /* xy->screen projections
  */
-#define XPROJECT(x)     ((proj_scale*(x))+proj_xofs)
-#define YPROJECT(y)     (proj_yofs-(proj_scale*(y)))
-#define INV_XPROJECT(x) (((x)-proj_xofs)*inv_proj_scale)
-#define INV_YPROJECT(y) ((proj_yofs-(y))*inv_proj_scale)
+#define XPROJECT(x)     ((proj_info.proj_scale*(x))+proj_info.proj_xofs)
+#define YPROJECT(y)     (proj_info.proj_yofs-(proj_info.proj_scale*(y)))
+#define INV_XPROJECT(x) (((x)-proj_info.proj_xofs)*proj_info.inv_proj_scale)
+#define INV_YPROJECT(y) ((proj_info.proj_yofs-(y))*proj_info.inv_proj_scale)
 
 #ifdef __alpha
 /* on alpha systems, trade off space for more efficient access
@@ -180,6 +206,14 @@ typedef struct
   double cos_lon, sin_lon;	/* cos/sin of view_lon */
   double cos_rot, sin_rot;	/* cos/sin of view_rot */
 } ViewPosInfo;
+
+typedef struct
+{
+  double proj_scale;
+  double proj_xofs;
+  double proj_yofs;
+  double inv_proj_scale;
+} ProjInfo;
 
 typedef struct
 {
@@ -229,7 +263,7 @@ extern void        show_marker_info _P((char *));
 extern void ppm_output _P((void));
 
 /* render.c */
-extern void render _P((void (*)(u_char *)));
+extern void render _P((int (*)(u_char *)));
 extern void do_dots _P((void));
 
 /* resources.c */
@@ -241,15 +275,13 @@ extern unsigned int get_pixel_resource _P((const char *, const char *));
 
 /* scan.c */
 extern ViewPosInfo view_pos_info;
-extern double      proj_scale;
-extern double      proj_xofs;
-extern double      proj_yofs;
-extern double      inv_proj_scale;
+extern ProjInfo    proj_info;
 extern ExtArr      scanbits;
 extern void        scan_map _P((void));
 
 /* sunpos.c */
-extern void sun_position _P((time_t, double *, double *));
+extern void   sun_position _P((time_t, double *, double *));
+extern void   moon_position _P((time_t, double *, double *));
 
 /* x11.c */
 extern void command_line_x _P((int, char *[]));
@@ -294,12 +326,13 @@ extern time_t current_time;
 extern void   compute_positions _P((void));
 extern char **tokenize _P((char *, int *, const char **));
 extern void   decode_proj_type _P((char *));
+extern void   decode_rotation _P((char *));
 extern void   decode_viewing_pos _P((char *));
 extern void   decode_sun_pos _P((char *));
 extern void   decode_size _P((char *));
 extern void   decode_shift _P((char *));
 extern void   xearth_bzero _P((char *, unsigned));
-extern void   version_info _P((void)) _noreturn;
+extern void   version_info _P((int));
 extern void   usage _P((const char *)) _noreturn;
 extern void   warning _P((const char *));
 extern void   fatal _P((const char *)) _noreturn;
