@@ -1,0 +1,49 @@
+# simple Makefile for xearth
+# RCS $Id: Makefile.DIST,v 1.6 1994/05/25 06:04:55 tuna Exp $
+#
+# Copyright (C) 1994 Kirk Lauritz Johnson
+#
+# Permission to use, copy, modify, distribute, and sell this software
+# and its documentation for any purpose is hereby granted without fee,
+# provided that the above copyright notice appear in all copies and
+# that both that copyright notice and this permission notice appear in
+# supporting documentation. The author makes no representations about
+# the suitability of this software for any purpose. It is provided "as
+# is" without express or implied warranty.
+#
+# THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+# INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN
+# NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+# CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+# OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+# NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
+# WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+DEFINES = 
+CC	= gcc
+CFLAGS	= -O2 $(DEFINES)
+LDFLAGS = 
+
+PROG	= xearth
+SRCS	= xearth.c dither.c extarr.c gif.c gifout.c mapdata.c ppm.c \
+	  render.c resources.c scan.c sunpos.c x11.c
+OBJS	= xearth.o dither.o extarr.o gif.o gifout.o mapdata.o ppm.o \
+	  render.o resources.o scan.o sunpos.o x11.o
+LIBS	= -lXt -lX11 -lm
+
+TARFILE = xearth.tar
+DIST	= Imakefile Makefile.DIST README INSTALL HISTORY xearth.man \
+	  dither.c extarr.c extarr.h gif.c gifint.h giflib.h gifout.c \
+	  kljcpyrt.h mapdata.c ppm.c render.c resources.c scan.c \
+	  sunpos.c x11.c xearth.c xearth.h
+
+all:	$(PROG)
+
+$(PROG):	$(OBJS)
+	$(CC) -o $(PROG) $(LDFLAGS) $(OBJS) $(LIBS)
+
+clean:
+	/bin/rm -f $(PROG) $(OBJS)
+
+tarfile:
+	tar cvf $(TARFILE) $(DIST)

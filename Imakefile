@@ -1,0 +1,33 @@
+XCOMM Imakefile for xearth
+XCOMM RCS $Id: Imakefile,v 1.7 1994/05/20 01:37:40 tuna Exp $
+XCOMM
+XCOMM Copyright (C) 1994 Kirk Lauritz Johnson
+XCOMM
+XCOMM Permission to use, copy, modify, distribute, and sell this
+XCOMM software and its documentation for any purpose is hereby granted
+XCOMM without fee, provided that the above copyright notice appear in
+XCOMM all copies and that both that copyright notice and this
+XCOMM permission notice appear in supporting documentation. The author
+XCOMM makes no representations about the suitability of this software
+XCOMM for any purpose. It is provided "as is" without express or
+XCOMM implied warranty.
+XCOMM
+XCOMM THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+XCOMM SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+XCOMM AND FITNESS, IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+XCOMM SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+XCOMM WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+XCOMM IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+XCOMM ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+XCOMM THIS SOFTWARE.
+
+        DEFINES = 
+           SRCS = xearth.c dither.c extarr.c gif.c gifout.c mapdata.c \
+                  ppm.c render.c resources.c scan.c sunpos.c x11.c
+           OBJS = xearth.o dither.o extarr.o gif.o gifout.o mapdata.o \
+                  ppm.o render.o resources.o scan.o sunpos.o x11.o
+        DEPLIBS = $(DEPXTOOLLIB) $(DEPXLIB)
+LOCAL_LIBRARIES = $(XTOOLLIB) $(XLIB)
+  SYS_LIBRARIES = -lm
+
+ComplexProgramTarget(xearth)

@@ -1,0 +1,86 @@
+RCS $Id: HISTORY,v 1.2 1994/06/01 23:38:14 tuna Exp $
+
+Release history for xearth, version 0.92
+Kirk Lauritz Johnson <tuna@cag.lcs.mit.edu>
+1 June 1994
+
+
+xearth version 0.92 (1 June 1994)
+
+  Fixed the broken code that was attempting to handle the situation
+  when the requested font couldn't be loaded.
+
+  Added black border/outline to label text (as was already being done
+  for marker text).
+
+  Several small changes to keep lint happier.
+
+
+xearth version 0.91 (25 May 1994)
+
+  Added code #ifdef-ed by NO_RANDOM and NO_SETPRIORITY to provide a
+  standard workaround for systems without random() and/or
+  setpriority().
+
+  First cut at support for monochrome mode and 1-bit framebuffers.
+  Monochrome mode is the default on 1-bit framebuffers; it can also be
+  enabled with the "-mono" command line flag or the ".mono" X
+  resource.
+
+  Provided built-in bzero() workalike to avoid problems with pre-X11R5
+  systems not having <X11/Xfuncs.h> and dealing with the ugly
+  machinations required to automatically determine the right thing to
+  do.
+
+  Fixed bug in man page; the description of the interpretation of
+  positive and negative values of longitude was incorrect.
+
+  Fixed and uncommented the code that tries to kill the resources of
+  any previous clients that had scribbled on the root window and left
+  an _XSETROOT_ID property. (Note that xearth still doesn't set an
+  _XSETROOT_ID property itself; see the big comment near line 380 of
+  x11.c for details.)
+
+  Minor performance tweaks and a few bug fixes in the dithering code.
+
+  Added complete text of copyright to all source and documentation
+  files (necessary for inclusion in the X11R6 contrib package).
+
+
+xearth version 0.9 (14 May 1994)
+
+  Wholesale changes. Many new features, including:
+
+  - child process no longer forked by default
+  - support for fixed, sun-relative, and orbital viewing positions
+  - lines of longitude and latitude
+  - (random) star-filled backgrounds
+  - support for both command line options and X resources
+  - brightly-colored location markers
+
+  plus numerous other small changes and bug fixes.
+
+
+xearth version 0.5 (23 July 1993)
+
+  Initial release
+
+----------------------------------------------------------------
+
+Copyright (C) 1994 Kirk Lauritz Johnson
+
+Permission to use, copy, modify, distribute, and sell this software
+and its documentation for any purpose is hereby granted without fee,
+provided that the above copyright notice appear in all copies and that
+both that copyright notice and this permission notice appear in
+supporting documentation. The author makes no representations about
+the suitability of this software for any purpose. It is provided "as
+is" without express or implied warranty.
+
+THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
+EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF
+USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.

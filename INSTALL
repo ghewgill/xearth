@@ -1,0 +1,186 @@
+RCS $Id: INSTALL,v 1.4 1994/06/01 23:38:14 tuna Exp $
+
+Installation notes for xearth, version 0.92
+Kirk Lauritz Johnson <tuna@cag.lcs.mit.edu>
+1 June 1994
+
+
+    NOTE: If you are trying to build xearth under SunOS 4.x using
+          /bin/cc, make sure to read the section entitled "BUILDING
+          UNDER SUNOS 4.x" (below) regarding a compiler bug.
+
+
+BUILDING USING IMAKE
+
+    To build xearth using imake:
+
+    (1) Edit "Imakefile" to add any DEFINES necessary for building on
+        your platform (see the section entitled "DEFINES" below).
+
+    (2) Run "xmkmf" to build a makefile.
+
+    (3) Run "make all" to build an executable.
+
+        If "make" complains cryptically about lines in the makefile
+        that start with "XCOMM" (you'll probably have to eyeball the
+        offending lines in the makefile to determine this), something
+        went wrong with "xmkmf" (or "imake"). You should be able to
+        fix this using something along the lines of
+
+            egrep -v ^XCOMM < Makefile > junk ; mv junk Makefile
+
+        (to strip out all lines that start with XCOMM) and then
+        running "make" again.
+
+        If the linker complains about either "random" and/or
+        "setpriority" being undefined, you probably need to add
+        "-DNO_RANDOM" and/or "-DNO_SETPRIORITY" to the right hand side
+        of the "DEFINES =" line in the Imakefile and start over. (See
+        the section entitled "DEFINES" below.)
+
+    (4) Run "make install" and "make install.man" to install the
+        executable and man page in whatever places are appropriate for
+        your system.
+
+
+BUILDING USING MAKE
+
+    To build xearth using make:
+
+    (1) Copy the distribution makefile "Makefile.DIST" to "Makefile".
+
+    (2) Edit the makefile if necessary; you may need to:
+
+      - add any DEFINES necessary for building on your platform (see
+        the section entitled "DEFINES" below)
+
+      - change the name of the C compiler (CC) from "gcc" to whatever
+        compiler you want to use when building
+
+      - change the compiler flags (CFLAGS) -- if your X include files
+        aren't found in the usual place (/usr/include), you may have
+        to add something along the lines of "-I<path-to-X-includes>"
+        to CFLAGS
+
+      - change the loader flags (LDFLAGS) -- if your X libraries
+        aren't found in the usual places (perhaps /lib and /usr/lib),
+        you may have to add something along the lines of
+        "-L<path-to-X-libraries>" to LDFLAGS
+
+    (3) Run "make all" to build an executable.
+
+        If the linker complains about either "random" and/or
+        "setpriority" being undefined, you probably need to add
+        "-DNO_RANDOM" and/or "-DNO_SETPRIORITY" to the right hand side
+        of the "DEFINES =" line in the Makefile and start over. (See
+        the section entitled "DEFINES" below.)
+
+    (4) Install the executable ("xearth") and man page ("xearth.man")
+        in whatever the appropriate places are for your environment.
+
+
+DEFINES
+
+    As of version 0.91, the xearth source code includes #ifdef-ed
+    workaround/replacement code for systems that don't provide the
+    random() and/or setpriority() library functions.
+
+    For systems that don't provide random(), #define the NO_RANDOM
+    symbol (this can be done by adding "-DNO_RANDOM" to the right hand
+    side of the "DEFINES =" line in the Makefile or Imakefile). Doing
+    so causes xearth to use the lrand48() function instead of
+    random(). (If your system doesn't have lrand48() either, you'll
+    have to go into xearth.h and change "#define random() lrand48()"
+    to something appropriate for your system.)
+
+    For systems that don't provide setpriority, #define the
+    NO_SETPRIORITY symbol (this can be done by adding
+    "-DNO_SETPRIORITY" to the right and side of the "DEFINES =" line
+    in the Makefile or Imakefile). Doing so causes xearth to use the
+    nice() function instead of setpriority().
+
+    If you compile xearth and the linker complains that either
+    random() or setpriority() is undefined, try defining NO_RANDOM
+    and/or NO_SETPRIORITY, as appropriate, and recompiling.
+
+
+BUILDING UNDER SUNOS 4.x
+
+    I believe something in dither.c exercises an optimizer bug in
+    SunOS 4.1.3 /bin/cc. When I compile using -O or -O2, the dither
+    code either causes a segmentation violation or (worse) runs
+    without crashing but produces incorrect output. This code works
+    fine under all the other compilers I can get my hands on,
+    however. So, if possible, don't use SunOS 4.1.3 /bin/cc to compile
+    xearth, or, if you have no other compilers, don't use optimization
+    when compiling dither.c.
+
+
+MISCELLANY
+
+    This version of Xearth has been tested on (at least) the following
+    platforms; the "DEFINES" column indicates any additional
+    definitions that were necessary when building (see above).
+
+      Processor  Operating System  DEFINES
+      ---------  ----------------  ----------------------------
+        Alpha     DEC OSF/1 V1.3   (none)
+        Alpha     DEC OSF/1 V2.0   (none)
+        HPPA      HPUX 9.0.1       -DNO_RANDOM
+        MIPS      IRIX 5.1         (none)
+        MIPS      Ultrix 4.3       (none)
+        MIPS      Ultrix 4.4       (none)
+        POWER     AIX 3.2          (none)
+        SPARC     Solaris 2.x      -DNO_RANDOM -DNO_SETPRIORITY
+        SPARC     SunOS 4.1.3      (none)
+        i486      Linux 1.0        (none)
+
+    Some compilers take an inordinately long time to compile
+    mapdata.c, especially when running on systems without very much
+    physical memory (e.g. 16 MB or less).
+
+
+MANIFEST
+
+    README              miscellaneous info
+    INSTALL             this file
+    HISTORY             release history
+    Imakefile           for use with "imake"
+    Makefile.DIST       for use with "make"
+    xearth.man          man page
+
+    dither.c            source code
+    extarr.[ch]
+    gif.c
+    gifint.h
+    giflib.h
+    gifout.c
+    kljcpyrt.h
+    mapdata.c
+    ppm.c
+    render.c
+    resources.c
+    scan.c
+    sunpos.c
+    x11.c
+    xearth.[ch]
+
+----------------------------------------------------------------
+
+Copyright (C) 1994 Kirk Lauritz Johnson
+
+Permission to use, copy, modify, distribute, and sell this software
+and its documentation for any purpose is hereby granted without fee,
+provided that the above copyright notice appear in all copies and that
+both that copyright notice and this permission notice appear in
+supporting documentation. The author makes no representations about
+the suitability of this software for any purpose. It is provided "as
+is" without express or implied warranty.
+
+THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
+EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF
+USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
