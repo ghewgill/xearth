@@ -1,0 +1,19 @@
+RCS $Id: GAMMA-TEST,v 1.2 1995/09/01 21:53:03 tuna Exp $
+
+This information is taken nearly verbatim from Robert Berger's web
+document
+
+  Why Do Images Appear Darker on Some Displays?
+  An Explanation of Monitor Gamma
+
+(URL http://www.cs.cmu.edu/afs/cs.cmu.edu/user/rwb/www/gamma.html)
+Those interested in further information about monitor gamma and gamma
+correction should start by reading that document.
+
+The gamma measurement image (gamma-test.gif) included in the xearth
+source distribution allows you to directly estimate the gamma of your
+display system. After loading the gamma-test.gif image for viewing
+using your favorite image viewer (e.g., xv, xloadimage), stand about 6
+feet away from your monitor and decide which column of the image comes
+closest to having equal brightness in the top and bottom halves. The
+number under this column is the gamma of your display system.

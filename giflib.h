@@ -3,21 +3,37 @@
  * kirk johnson
  * may 1990
  *
- * RCS $Id: giflib.h,v 1.3 1994/05/20 01:37:40 tuna Exp $
+ * RCS $Id: giflib.h,v 1.5 1995/09/24 00:43:00 tuna Exp $
  * 
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -67,6 +83,8 @@
 
 typedef unsigned char BYTE;
 
+#ifdef USING_GIF_IN
+
 /*
  * procedures exported by gifin.c
  */
@@ -101,15 +119,17 @@ extern int  gifin_l_ncolors;        /* number of colors, local colormap */
 extern BYTE gifin_l_cmap[3][256];   /* local colormap */
 extern BYTE gifin_interlace_flag;   /* interlace image format flag */
 
+#endif /* USING_GIF_IN */
+
 /*
  * procedures exported by gifout.c
  */
 
-extern int  gifout_open_file();
-extern int  gifout_open_image();
-extern void gifout_put_pixel();
-extern void gifout_put_row();
-extern int  gifout_close_image();
-extern int  gifout_close_file();
+extern int  gifout_open_file _P((FILE *, int, int, int, BYTE [3][256], int));
+extern int  gifout_open_image _P((int, int, int, int));
+extern void gifout_put_pixel _P((int));
+extern void gifout_put_row _P((int *));
+extern int  gifout_close_image _P((void));
+extern int  gifout_close_file _P((void));
 
 #endif

@@ -3,21 +3,37 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: x11.c,v 1.15 1994/06/01 18:03:35 tuna Exp $
+ * RCS $Id: x11.c,v 1.35 1995/09/25 01:12:41 tuna Exp $
  *
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -36,83 +52,51 @@
 #include <X11/Xproto.h>
 #include "kljcpyrt.h"
 
-#define MONO_1  (0)
-#define MONO_8  (1)
-#define COLOR_8 (2)
-
 #define RETAIN_PROP_NAME "_XSETROOT_ID"
 
-typedef struct
-{
-  float lat;			/* marker latitude  */
-  float lon;			/* marker longitude */
-  char *label;			/* marker label     */
-} MarkerInfo;
+#define MONO_1   (0)
+#define MONO_8   (1)
+#define COLOR_8  (2)
+#define MONO_16  (3)
+#define COLOR_16 (4)
+#define MONO_32  (5)
+#define COLOR_32 (6)
 
-static XFontStruct *load_x_font();
-static void         get_viewing_position();
-static void         get_sun_position();
-static void         get_size();
-static void         get_shift();
-static void         draw_label();
-static void         mark_location();
-static void         draw_outlined_string();
-static Window       GetVRoot();
-static void         updateProperty();
-static void         preserveResource();
-static void         freePrevious();
-static int          xkill_handler();
+#define LABEL_LEFT_FLUSH (1<<0)
+#define LABEL_TOP_FLUSH  (1<<1)
 
-static MarkerInfo marker_info[] =
-{
-{  61.2, -149.9, "Anchorage" },
-{  38.0,   23.7, "Athens" },
-{  39.9,  116.5, "Beijing" },
-{  52.5,   13.4, "Berlin" },
-{  19.0,   72.8, "Bombay" },
-{  42.4,  -71.1, "Boston" },
-{  50.8,    4.4, "Brussels" },
-{ -34.6,  -58.1, "Buenos Aires" },
-{  31.3,   31.1, "Cairo" },
-{ -33.9,   18.4, "Cape Town" },
-{  41.9,  -87.7, "Chicago" },
-{  32.8,  -96.8, "Dallas" },
-{  39.7, -105.0, "Denver" },
-{  24.5,   54.4, "Dubai" },
-{  60.2,   25.0, "Helsinki" },
-{  21.3, -157.9, "Honolulu" },
-{  -6.2,  106.8, "Jakarta" },
-{   3.1,  101.7, "Kuala Lumpur" },
-{ -12.1,  -77.0, "Lima" },
-{  51.5,   -0.1, "London" },
-{  55.8,   37.7, "Moscow" },
-{  -1.3,   36.8, "Nairobi" },
-{  59.9,   10.7, "Oslo" },
-{  48.9,    2.4, "Paris" },
-{  64.2,  -22.0, "Reykjavik" },
-{ -22.9,  -43.2, "Rio de Janeiro" },
-{  41.5,   12.4, "Rome" },
-{  37.8, -122.4, "San Francisco" },
-{   9.8,  -83.4, "San Jose" },
-{  42.7,   23.3, "Sofia" },
-{  59.6,   18.1, "Stockholm" },
-{ -33.9,  151.2, "Sydney" },
-{  32.1,   34.8, "Tel Aviv" },
-{  35.7,  139.7, "Tokyo" },
-{  43.7,  -79.4, "Toronto" },
-{  49.3, -123.1, "Vancouver" },
-{  48.2,   16.4, "Vienna" },
-{ -41.3,  174.8, "Wellington" },
-{     0,      0, NULL },
-};
+static XFontStruct *load_x_font _P((Display *, char *));
+static void         get_proj_type _P((void));
+static void         get_viewing_position _P((void));
+static void         get_sun_position _P((void));
+static void         get_size _P((void));
+static void         get_shift _P((void));
+static void         get_labelpos _P((void));
+static void         x11_setup _P((void));
+static void         pack_mono_1 _P((u16or32 *, u_char *));
+static void         pack_8 _P((u16or32 *, Pixel *, u_char *));
+static void         pack_16 _P((u16or32 *, Pixel *, u_char *));
+static void         pack_32 _P((u16or32 *, Pixel *, u_char *));
+static void         x11_row _P((u_char *));
+static void         x11_cleanup _P((void));
+static void         draw_label _P((Display *));
+static void         mark_location _P((Display *, MarkerInfo *));
+static void         draw_outlined_string _P((Display *, Pixmap, Pixel, Pixel,
+                      int, int, char *, int));
+static Window       GetVRoot _P((Display *));
+static void         updateProperty _P((Display *, Window, const char *, Atom,
+                      int, int, int));
+static void         preserveResource _P((Display *, Window));
+static void         freePrevious _P((Display *, Window));
+static int          xkill_handler _P((Display *, XErrorEvent *));
 
-static u_char *dith;
-static u_char *xbuf;
-static int     idx;
-static XImage *xim;
-static Pixmap  work_pix;
-static Pixmap  disp_pix;
-static int   (*orig_error_handler)();
+static u16or32 *dith;
+static u_char  *xbuf;
+static int      idx;
+static XImage  *xim;
+static Pixmap   work_pix;
+static Pixmap   disp_pix;
+static int    (*orig_error_handler) _P((Display *, XErrorEvent *));
 
 #ifdef DEBUG
 static int frame = 0;
@@ -126,84 +110,105 @@ XrmDatabase  db;
 Display     *dsply;             /* display connection  */
 int          scrn;              /* screen number       */
 Window       root;              /* root window         */
-Window       vroot;		/* virtual root window */
+Window       vroot;             /* virtual root window */
 Colormap     cmap;              /* default colormap    */
 Visual      *visl;              /* default visual      */
 int          dpth;              /* default depth       */
 Pixel        white;             /* white pixel         */
 Pixel        black;             /* black pixel         */
-Pixel        hlight;		/* highlight pixel     */
+Pixel        hlight;            /* highlight pixel     */
 GC           gc;                /* graphics context    */
 Pixel       *pels;              /* allocated colors    */
-char        *font_name;		/* text font name      */
+char        *font_name;         /* text font name      */
 XFontStruct *font;              /* basic text font     */
 
-int          mono;		/* render in mono?     */
-int          x_type;		/* type of rendering   */
+static int   do_once;           /* only render once?   */
+static int   mono;              /* render in mono?     */
+static int   x_type;            /* type of rendering   */
+
+static int   label_xvalue;      /* label x position    */
+static int   label_yvalue;      /* label y position    */
+static int   label_orient;      /* label orientation   */
 
 
 static char *defaults[] =
 {
-  "*pos:      sunrel 0 0",
-  "*shift:    0 0",
-  "*mag:      0.99",
-  "*shade:    on",
-  "*label:    off",
-  "*markers:  on",
-  "*wait:     300",
-  "*timewarp: 1",
-  "*day:      100",
-  "*night:    10",
-  "*twopix:   on",
-  "*ncolors:  64",
-  "*fork:     off",
-  "*nice:     0",
-  "*stars:    on",
-  "*starfreq: 0.002",
-  "*grid:     off",
-  "*grid1:    6",
-  "*grid2:    15",
-  "*gamma:    1.0",
-  "*font:     variable",
+  "*proj:       orthographic",
+  "*pos:        sunrel 0 0",
+  "*rot:        0",
+  "*shift:      0 0",
+  "*mag:        1.0",
+  "*shade:      on",
+  "*label:      off",
+  "*labelpos:   -5-5",
+  "*markers:    on",
+  "*markerfile: built-in",
+  "*wait:       300",
+  "*timewarp:   1",
+  "*day:        100",
+  "*night:      5",
+  "*term:       1",
+  "*twopix:     on",
+  "*ncolors:    64",
+  "*fork:       off",
+  "*once:       off",
+  "*nice:       0",
+  "*stars:      on",
+  "*starfreq:   0.002",
+  "*bigstars:   0",
+  "*grid:       off",
+  "*grid1:      6",
+  "*grid2:      15",
+  "*gamma:      1.0",
+  "*font:       variable",
   NULL
 };
 
 static XrmOptionDescRec options[] =
 {
-{ "-pos",       ".pos",      XrmoptionSepArg, 0     },
-{ "-mag",       ".mag",      XrmoptionSepArg, 0     },
-{ "-shade",     ".shade",    XrmoptionNoArg,  "on"  },
-{ "-noshade",   ".shade",    XrmoptionNoArg,  "off" },
-{ "-sunpos",    ".sunpos",   XrmoptionSepArg, 0     },
-{ "-size",      ".size",     XrmoptionSepArg, 0     },
-{ "-shift",     ".shift",    XrmoptionSepArg, 0     },
-{ "-label",     ".label",    XrmoptionNoArg,  "on"  },
-{ "-nolabel",   ".label",    XrmoptionNoArg,  "off" },
-{ "-markers",   ".markers",  XrmoptionNoArg,  "on"  },
-{ "-nomarkers", ".markers",  XrmoptionNoArg,  "off" },
-{ "-wait",      ".wait",     XrmoptionSepArg, 0     },
-{ "-timewarp",  ".timewarp", XrmoptionSepArg, 0     },
-{ "-day",       ".day",      XrmoptionSepArg, 0     },
-{ "-night",     ".night",    XrmoptionSepArg, 0     },
-{ "-onepix",    ".twopix",   XrmoptionNoArg,  "off" },
-{ "-twopix",    ".twopix",   XrmoptionNoArg,  "on"  },
-{ "-ncolors",   ".ncolors",  XrmoptionSepArg, 0     },
-{ "-fork",      ".fork",     XrmoptionNoArg,  "on"  },
-{ "-nofork",    ".fork",     XrmoptionNoArg,  "off" },
-{ "-nice",      ".nice",     XrmoptionSepArg, 0     },
-{ "-version",   ".version",  XrmoptionNoArg,  "on"  },
-{ "-stars",     ".stars",    XrmoptionNoArg,  "on"  },
-{ "-nostars",   ".stars",    XrmoptionNoArg,  "off" },
-{ "-starfreq",  ".starfreq", XrmoptionSepArg, 0     },
-{ "-grid",      ".grid",     XrmoptionNoArg,  "on"  },
-{ "-nogrid",    ".grid",     XrmoptionNoArg,  "off" },
-{ "-grid1",     ".grid1",    XrmoptionSepArg, 0     },
-{ "-grid2",     ".grid2",    XrmoptionSepArg, 0     },
-{ "-time",      ".time",     XrmoptionSepArg, 0     },
-{ "-gamma",     ".gamma",    XrmoptionSepArg, 0     },
-{ "-font",      ".font",     XrmoptionSepArg, 0     },
-{ "-mono",      ".mono",     XrmoptionNoArg,  "on"  },
-{ "-nomono",    ".mono",     XrmoptionNoArg,  "off" },
+{ "-proj",        ".proj",        XrmoptionSepArg, 0     },
+{ "-pos",         ".pos",         XrmoptionSepArg, 0     },
+{ "-rot",         ".rot",         XrmoptionSepArg, 0     },
+{ "-mag",         ".mag",         XrmoptionSepArg, 0     },
+{ "-shade",       ".shade",       XrmoptionNoArg,  "on"  },
+{ "-noshade",     ".shade",       XrmoptionNoArg,  "off" },
+{ "-sunpos",      ".sunpos",      XrmoptionSepArg, 0     },
+{ "-size",        ".size",        XrmoptionSepArg, 0     },
+{ "-shift",       ".shift",       XrmoptionSepArg, 0     },
+{ "-label",       ".label",       XrmoptionNoArg,  "on"  },
+{ "-nolabel",     ".label",       XrmoptionNoArg,  "off" },
+{ "-labelpos",    ".labelpos",    XrmoptionSepArg, 0     },
+{ "-markers",     ".markers",     XrmoptionNoArg,  "on"  },
+{ "-nomarkers",   ".markers",     XrmoptionNoArg,  "off" },
+{ "-markerfile",  ".markerfile",  XrmoptionSepArg, 0     },
+{ "-showmarkers", ".showmarkers", XrmoptionNoArg,  "on"  },
+{ "-wait",        ".wait",        XrmoptionSepArg, 0     },
+{ "-timewarp",    ".timewarp",    XrmoptionSepArg, 0     },
+{ "-day",         ".day",         XrmoptionSepArg, 0     },
+{ "-night",       ".night",       XrmoptionSepArg, 0     },
+{ "-term",        ".term",        XrmoptionSepArg, 0     },
+{ "-onepix",      ".twopix",      XrmoptionNoArg,  "off" },
+{ "-twopix",      ".twopix",      XrmoptionNoArg,  "on"  },
+{ "-ncolors",     ".ncolors",     XrmoptionSepArg, 0     },
+{ "-fork",        ".fork",        XrmoptionNoArg,  "on"  },
+{ "-nofork",      ".fork",        XrmoptionNoArg,  "off" },
+{ "-once",        ".once",        XrmoptionNoArg,  "on"  },
+{ "-noonce",      ".once",        XrmoptionNoArg,  "off" },
+{ "-nice",        ".nice",        XrmoptionSepArg, 0     },
+{ "-version",     ".version",     XrmoptionNoArg,  "on"  },
+{ "-stars",       ".stars",       XrmoptionNoArg,  "on"  },
+{ "-nostars",     ".stars",       XrmoptionNoArg,  "off" },
+{ "-starfreq",    ".starfreq",    XrmoptionSepArg, 0     },
+{ "-bigstars",    ".bigstars",    XrmoptionSepArg, 0     },
+{ "-grid",        ".grid",        XrmoptionNoArg,  "on"  },
+{ "-nogrid",      ".grid",        XrmoptionNoArg,  "off" },
+{ "-grid1",       ".grid1",       XrmoptionSepArg, 0     },
+{ "-grid2",       ".grid2",       XrmoptionSepArg, 0     },
+{ "-time",        ".time",        XrmoptionSepArg, 0     },
+{ "-gamma",       ".gamma",       XrmoptionSepArg, 0     },
+{ "-font",        ".font",        XrmoptionSepArg, 0     },
+{ "-mono",        ".mono",        XrmoptionNoArg,  "on"  },
+{ "-nomono",      ".mono",        XrmoptionNoArg,  "off" },
 };
 
 
@@ -219,8 +224,8 @@ void command_line_x(argc, argv)
   progname  = argv[0];
   progclass = "XEarth";
   app_shell = XtAppInitialize(&app_context, progclass,
-			      options, XtNumber(options),
-			      &argc, argv, defaults, 0, 0);
+                              options, XtNumber(options),
+                              &argc, argv, defaults, 0, 0);
   if (argc > 1) usage(NULL);
 
   dsply = XtDisplay(app_shell);
@@ -238,32 +243,45 @@ void command_line_x(argc, argv)
   if (get_boolean_resource("version", "Version"))
     version_info();
 
+  if (get_boolean_resource("showmarkers", "Showmarkers"))
+  {
+    markerfile = get_string_resource("markerfile", "Markerfile");
+    show_marker_info(markerfile);
+  }
+
   wdth = DisplayWidth(dsply, scrn);
   hght = DisplayHeight(dsply, scrn);
 
   /* process complex resources
    */
+  get_proj_type();
   get_viewing_position();
   get_sun_position();
   get_size();
   get_shift();
+  get_labelpos();
 
   /* process simple resources
    */
+  view_rot        = get_float_resource("rot", "Rot");
   view_mag        = get_float_resource("mag", "Mag");
   do_shade        = get_boolean_resource("shade", "Shade");
   do_label        = get_boolean_resource("label", "Label");
   do_markers      = get_boolean_resource("markers", "Markers");
+  markerfile      = get_string_resource("markerfile", "Markerfile");
   wait_time       = get_integer_resource("wait", "Wait");
   time_warp       = get_float_resource("timewarp", "Timewarp");
   day             = get_integer_resource("day", "Day");
   night           = get_integer_resource("night", "Night");
+  terminator      = get_integer_resource("term", "Term");
   use_two_pixmaps = get_boolean_resource("twopix", "Twopix");
   num_colors      = get_integer_resource("ncolors", "Ncolors");
   do_fork         = get_boolean_resource("fork", "Fork");
+  do_once         = get_boolean_resource("once", "Once");
   priority        = get_integer_resource("nice", "Nice");
   do_stars        = get_boolean_resource("stars", "Stars");
   star_freq       = get_float_resource("starfreq", "Starfreq");
+  big_stars       = get_integer_resource("bigstars", "Bigstars");
   do_grid         = get_boolean_resource("grid", "Grid");
   grid_big        = get_integer_resource("grid1", "Grid1");
   grid_small      = get_integer_resource("grid2", "Grid2");
@@ -276,21 +294,24 @@ void command_line_x(argc, argv)
    *
    *  differentiate between label and marker fonts
    *  allow user to specify label, marker, star, grid colors
-   *  allow user to specify # of markers and positions
    */
 
   /* various sanity checks on simple resources
    */
+  if ((view_rot < -180) || (view_rot > 360))
+    fatal("viewing rotation must be between -180 and 360");
   if (view_mag <= 0)
     fatal("viewing magnification must be positive");
   if (wait_time < 0)
     fatal("arg to -wait must be non-negative");
   if (time_warp <= 0)
     fatal("arg to -timewarp must be positive");
-  if (num_colors < 3)
-    fatal("arg to -ncolors must be >= 3");
+  if ((num_colors < 3) || (num_colors > 1024))
+    fatal("arg to -ncolors must be between 3 and 1024");
   if ((star_freq < 0) || (star_freq > 1))
     fatal("arg to -starfreq must be between 0 and 1");
+  if ((big_stars < 0) || (big_stars > 100))
+    fatal("arg to -bigstars must be between 0 and 100");
   if (grid_big <= 0)
     fatal("arg to -grid1 must be positive");
   if (grid_small <= 0)
@@ -299,8 +320,16 @@ void command_line_x(argc, argv)
     fatal("arg to -day must be between 0 and 100");
   if ((night > 100) || (night < 0))
     fatal("arg to -night must be between 0 and 100");
+  if ((terminator > 100) || (terminator < 0))
+    fatal("arg to -term must be between 0 and 100");
   if (xgamma <= 0)
     fatal("arg to -gamma must be positive");
+
+  /* if we're only rendering once, make sure we don't
+   * waste memory by allocating two pixmaps
+   */
+  if (do_once)
+    use_two_pixmaps = 0;
 
   white = WhitePixel(dsply, scrn);
   black = BlackPixel(dsply, scrn);
@@ -308,34 +337,56 @@ void command_line_x(argc, argv)
   XSetState(dsply, gc, white, black, GXcopy, AllPlanes);
   hlight = white;
 
-  /* i _think_ the eight-bit code will work on any eight-bit display,
-   * but i'm not absolutely certain; ditto with the one-bit code.
-   * other depths definitely won't work until i add code to support
-   * them.
-   */
-
   switch (dpth)
   {
   case 1:
+    /* try to pack ximage data 1 bit/pixel */
     x_type = MONO_1;
     break;
 
   case 8:
+    /* try to pack ximage data 8 bits/pixel */
     x_type = mono ? MONO_8 : COLOR_8;
     break;
 
+  case 12:
+  case 15:
+  case 16:
+    /* try to pack ximage data 16 bits/pixel */
+    x_type = mono ? MONO_16 : COLOR_16;
+    break;
+
+  case 24:
+    /* try to pack ximage data 32 bits/pixel */
+    x_type = mono ? MONO_32 : COLOR_32;
+    break;
+
   default:
-    fatal("this verison of xearth only supports 1- and 8-bit displays");
+    fflush(stdout);
+    fprintf(stderr,
+            "xearth %s: fatal - unsupported display depth %d\n",
+            VersionString, dpth);
+    fprintf(stderr,
+            "  (supported depths: 1, 8, 15, 16, and 24 bits)\n");
+    exit(1);
   }
 
   switch (x_type)
   {
   case MONO_1:
   case MONO_8:
+  case MONO_16:
+  case MONO_32:
     mono_dither_setup();
+    pels = (Pixel *) malloc((unsigned) sizeof(Pixel) * 2);
+    assert(pels != NULL);
+    pels[0] = black;
+    pels[1] = white;
     break;
 
   case COLOR_8:
+  case COLOR_16:
+  case COLOR_32:
     if (XAllocNamedColor(dsply, cmap, "red", &xc, &junk) != 0)
       hlight = xc.pixel;
 
@@ -352,7 +403,7 @@ void command_line_x(argc, argv)
       xc.blue  = ((1<<16)-1) * pow(((double) tmp[2] / 255), inv_xgamma);
 
       if (XAllocColor(dsply, cmap, &xc) == 0)
-	fatal("unable to allocate enough colors");
+        fatal("unable to allocate enough colors");
       pels[i] = xc.pixel;
 
       tmp += 3;
@@ -364,10 +415,10 @@ void command_line_x(argc, argv)
   }
 
   work_pix = XCreatePixmap(dsply, root, (unsigned) wdth,
-			   (unsigned) hght, (unsigned) dpth);
+                           (unsigned) hght, (unsigned) dpth);
   if (use_two_pixmaps)
     disp_pix = XCreatePixmap(dsply, root, (unsigned) wdth,
-			     (unsigned) hght, (unsigned) dpth);
+                             (unsigned) hght, (unsigned) dpth);
 
   font = load_x_font(dsply, font_name);
 
@@ -381,7 +432,7 @@ void command_line_x(argc, argv)
    *
    * setting the _XSETROOT_ID property is dangerous if xearth might be
    * killed by other means (e.g., from the shell), because some other
-   * client might allocate an resource with the same resource ID that
+   * client might allocate a resource with the same resource ID that
    * xearth had stored in the _XSETROOT_ID property, so subsequent
    * attempts to free any resources retained by a client that had
    * scribbled on the root window via XKillClient() may end up killing
@@ -389,7 +440,7 @@ void command_line_x(argc, argv)
    *
    * this possibility could be eliminated by setting the closedown
    * mode for the display connection to RetainPermanent, but this
-   * seemed to be causing core dumps in an R5pl26 server -- i submited
+   * seemed to be causing core dumps in an R5pl26 server -- i submitted
    * a bug report to the X consortium about this. i _think_ the server
    * core dumps were related to the fact that xearth can sleep for a
    * _long_ time between protocol requests, perhaps longer than it
@@ -420,13 +471,48 @@ void command_line_x(argc, argv)
 }
 
 
-static XFontStruct *load_x_font(dpy, font_name)
+void x11_output()
+{
+  while (1)
+  {
+    compute_positions();
+
+    /* if we were really clever, we'd only
+     * do this if the position has changed
+     */
+    scan_map();
+    do_dots();
+
+    /* for now, go ahead and reload the marker info every time
+     * we redraw, but maybe change this in the future?
+     */
+    load_marker_info(markerfile);
+
+    x11_setup();
+    render(x11_row);
+    x11_cleanup();
+
+    if (do_once)
+    {
+      preserveResource(dsply, vroot);
+      XSync(dsply, True);
+      return;
+    }
+
+    /* sleep for designated wait_time
+     */
+    sleep((unsigned) wait_time);
+  }
+}
+
+
+static XFontStruct *load_x_font(dpy, fontname)
      Display *dpy;
-     char    *font_name;
+     char    *fontname;
 {
   XFontStruct *rslt;
 
-  rslt = XLoadQueryFont(dpy, font_name);
+  rslt = XLoadQueryFont(dpy, fontname);
   if (rslt == NULL)
   {
     rslt = XQueryFont(dpy, XGContextFromGC(gc));
@@ -441,6 +527,21 @@ static XFontStruct *load_x_font(dpy, font_name)
   }
 
   return rslt;
+}
+
+
+/* fetch and decode 'proj' resource (projection type)
+ */
+static void get_proj_type()
+{
+  char *res;
+
+  res = get_string_resource("proj", "Proj");
+  if (res != NULL)
+  {
+    decode_proj_type(res);
+    free(res);
+  }
 }
 
 
@@ -504,40 +605,126 @@ static void get_shift()
 }
 
 
-void x11_setup()
+/* fetch and decode 'labelpos' resource (label position)
+ */
+static void get_labelpos()
+{
+  char    *res;
+  int      mask;
+  int      x, y;
+  unsigned w, h;
+
+  /* it's somewhat brute-force ugly to hard-code these here,
+   * duplicating information contained in defaults[], but such it is.
+   */
+  label_orient = 0;
+  label_xvalue = wdth - 5;
+  label_yvalue = hght - 5;
+
+  res = get_string_resource("labelpos", "Labelpos");
+  if (res != NULL)
+  {
+    mask = XParseGeometry(res, &x, &y, &w, &h);
+
+    if (mask & (WidthValue | HeightValue))
+      warning("width and height ignored in label position");
+
+    if ((mask & XValue) && (mask & YValue))
+    {
+      if (mask & XNegative)
+      {
+        label_xvalue = wdth + x;
+      }
+      else
+      {
+        label_xvalue  = x;
+        label_orient |= LABEL_LEFT_FLUSH;
+      }
+
+      if (mask & YNegative)
+      {
+        label_yvalue = hght + y;
+      }
+      else
+      {
+        label_yvalue  = y;
+        label_orient |= LABEL_TOP_FLUSH;
+      }
+    }
+    else
+    {
+      warning("label position must specify x and y offsets");
+    }
+
+    free(res);
+  }
+}
+
+
+static void x11_setup()
 {
   int dith_size;
   int xbuf_size;
+  int bits_per_pixel;
 
   switch (x_type)
   {
   case MONO_1:
-    dith_size = wdth + 7;
-    xbuf_size = dith_size >> 3;
+    dith_size      = wdth + 7;
+    xbuf_size      = dith_size >> 3;
+    bits_per_pixel = 1;
     break;
 
   case MONO_8:
   case COLOR_8:
-    dith_size = wdth;
-    xbuf_size = dith_size;
+    dith_size      = wdth;
+    xbuf_size      = dith_size;
+    bits_per_pixel = 8;
+    break;
+
+  case MONO_16:
+  case COLOR_16:
+    dith_size      = wdth;
+    xbuf_size      = dith_size * 2;
+    bits_per_pixel = 16;
+    break;
+
+  case MONO_32:
+  case COLOR_32:
+    dith_size      = wdth;
+    xbuf_size      = dith_size * 4;
+    bits_per_pixel = 32;
     break;
 
   default:
     /* keep lint happy */
-    dith_size = 0;
-    xbuf_size = 0;
+    dith_size      = 0;
+    xbuf_size      = 0;
+    bits_per_pixel = 0;
     assert(0);
   }
 
-  dith = (u_char *) malloc((unsigned) dith_size);
+  dith = (u16or32 *) malloc((unsigned) sizeof(u16or32) * dith_size);
   assert(dith != NULL);
 
   xbuf = (u_char *) malloc((unsigned) xbuf_size);
   assert(xbuf != NULL);
 
   xim = XCreateImage(dsply, visl, (unsigned) dpth, ZPixmap, 0,
-		     (char *) xbuf, (unsigned) wdth, 1, 8,
-		     xbuf_size);
+                     (char *) xbuf, (unsigned) wdth, 1, 8,
+                     xbuf_size);
+
+  if (xim->bits_per_pixel != bits_per_pixel)
+  {
+    fflush(stdout);
+    fprintf(stderr,
+            "xearth %s: fatal - unexpected bits/pixel for depth %d\n",
+            VersionString, dpth);
+    fprintf(stderr,
+            "  (expected %d bits/pixel, actual value is %d)\n",
+            bits_per_pixel, xim->bits_per_pixel);
+    exit(1);
+  }
 
   if (x_type == MONO_1)
   {
@@ -551,70 +738,163 @@ void x11_setup()
 }
 
 
-void x11_row(row)
+/* pack pixels into ximage format (assuming bits_per_pixel == 1,
+ * bitmap_bit_order == MSBFirst, and byte_order == MSBFirst)
+ */
+static void pack_mono_1(src, dst)
+     u16or32 *src;
+     u_char  *dst;
+{
+  int      i, i_lim;
+  unsigned val;
+
+  i_lim = wdth;
+  for (i=0; i<i_lim; i+=8)
+  {
+    val = ((src[0] << 7) | (src[1] << 6) | (src[2] << 5) |
+           (src[3] << 4) | (src[4] << 3) | (src[5] << 2) |
+           (src[6] << 1) | (src[7] << 0));
+
+    /* if white is pixel 0, need to toggle the bits
+     */
+    dst[i>>3] = (white == 0) ? (~ val) : val;
+    src += 8;
+  }
+}
+
+
+/* pack pixels into ximage format (assuming bits_per_pixel == 8)
+ */
+static void pack_8(src, map, dst)
+     u16or32 *src;
+     Pixel   *map;
+     u_char  *dst;
+{
+  int      i, i_lim;
+  unsigned val;
+
+  i_lim = wdth;
+  for (i=0; i<i_lim; i++)
+  {
+    val = map[src[i]];
+    dst[i] = val;
+  }
+}
+
+
+/* pack pixels into ximage format (assuming bits_per_pixel == 16)
+ */
+static void pack_16(src, map, dst)
+     u16or32 *src;
+     Pixel   *map;
+     u_char  *dst;
+{
+  int      i, i_lim;
+  unsigned val;
+
+  i_lim = wdth;
+
+  if (xim->byte_order == MSBFirst)
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = (val >> 8) & 0xff;
+      dst[1] = val & 0xff;
+      dst   += 2;
+    }
+  }
+  else /* (xim->byte_order == LSBFirst) */
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = val & 0xff;
+      dst[1] = (val >> 8) & 0xff;
+      dst   += 2;
+    }
+  }
+}
+
+
+/* pack pixels into ximage format (assuming bits_per_pixel == 32)
+ */
+static void pack_32(src, map, dst)
+     u16or32 *src;
+     Pixel   *map;
+     u_char  *dst;
+{
+  int      i, i_lim;
+  unsigned val;
+
+  i_lim = wdth;
+
+  if (xim->byte_order == MSBFirst)
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = (val >> 24) & 0xff;
+      dst[1] = (val >> 16) & 0xff;
+      dst[2] = (val >> 8) & 0xff;
+      dst[3] = val & 0xff;
+      dst   += 4;
+    }
+  }
+  else /* (xim->byte_order == LSBFirst) */
+  {
+    for (i=0; i<i_lim; i++)
+    {
+      val    = map[src[i]];
+      dst[0] = val & 0xff;
+      dst[1] = (val >> 8) & 0xff;
+      dst[2] = (val >> 16) & 0xff;
+      dst[3] = (val >> 24) & 0xff;
+      dst   += 4;
+    }
+  }
+}
+
+
+static void x11_row(row)
      u_char *row;
 {
-  int     i, i_lim;
-  int     val;
-  u_char *tmp;
-
   switch (x_type)
   {
   case MONO_1:
-  case MONO_8:
-  {
-    /* convert row to gray scale
-     */
-    tmp   = dith;
-    i_lim = wdth;
-    for (i=0; i<i_lim; i++)
-    {
-      tmp[i] = ((2 * row[0]) + (5 * row[1]) + row[2]) >> 3;
-      row += 3;
-    }
-
-    /* dither to 0s (black) and 1s (white)
-     */
-    mono_dither_row(tmp);
-
-    if (x_type == MONO_1)
-    {
-      /* pack pixels into bytes (assuming the XImage uses MSBFirst
-       * bitmap_bit_order and MSBFirst byte_order)
-       */
-      for (i=0; i<i_lim; i+=8)
-      {
-	val = ((tmp[0] << 7) | (tmp[1] << 6) | (tmp[2] << 5) |
-	       (tmp[3] << 4) | (tmp[4] << 3) | (tmp[5] << 2) |
-	       (tmp[6] << 1) | (tmp[7] << 0));
-
-	/* if white is pixel 0, need to toggle the bits
-	 */
-	xbuf[i>>3] = (white == 0) ? (~ val) : val;
-	tmp += 8;
-      }
-    }
-    else
-    {
-      /* convert to black and white pixels
-       */
-      for (i=0; i<i_lim; i++)
-	xbuf[i] = tmp[i] ? white : black;
-    }
+    mono_dither_row(row, dith);
+    pack_mono_1(dith, xbuf);
     break;
-  }
+
+  case MONO_8:
+    mono_dither_row(row, dith);
+    pack_8(dith, pels, xbuf);
+    break;
+
+  case MONO_16:
+    mono_dither_row(row, dith);
+    pack_16(dith, pels, xbuf);
+    break;
+
+  case MONO_32:
+    mono_dither_row(row, dith);
+    pack_32(dith, pels, xbuf);
+    break;
 
   case COLOR_8:
-  {
-    /* dither to colormap
-     */
     dither_row(row, dith);
-
-    i_lim = wdth;
-    for (i=0; i<i_lim; i++)
-      xbuf[i] = pels[dith[i]];
+    pack_8(dith, pels, xbuf);
     break;
-  }
+
+  case COLOR_16:
+    dither_row(row, dith);
+    pack_16(dith, pels, xbuf);
+    break;
+
+  case COLOR_32:
+    dither_row(row, dith);
+    pack_32(dith, pels, xbuf);
+    break;
 
   default:
     assert(0);
@@ -625,7 +905,7 @@ void x11_row(row)
 }
 
 
-void x11_cleanup()
+static void x11_cleanup()
 {
   MarkerInfo *minfo;
   Display    *dpy;
@@ -641,7 +921,7 @@ void x11_cleanup()
     minfo = marker_info;
     while (minfo->label != NULL)
     {
-      mark_location(dpy, minfo->lat, minfo->lon, minfo->label);
+      mark_location(dpy, minfo);
       minfo += 1;
     }
   }
@@ -675,72 +955,105 @@ static void draw_label(dpy)
 
   dy = font->ascent + font->descent + 1;
 
-  strftime(buf, sizeof(buf), "%d %h %y %H:%M %Z", localtime(&current_time));
-  len = strlen(buf);
-  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
-  x = wdth - (extents.rbearing + 10);
-  y = hght - (2*dy + 10);
-  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
-
-  sprintf(buf, "view %.1f %c %.1f %c",
-          fabs(view_lat), ((view_lat < 0) ? 'S' : 'N'),
-          fabs(view_lon), ((view_lon < 0) ? 'W' : 'E'));
-  len = strlen(buf);
-  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
-  x = wdth - (extents.rbearing + 10);
-  y = hght - (1*dy + 10);
-  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
-
-  sprintf(buf, "sun %.1f %c %.1f %c",
-          fabs(sun_lat), ((sun_lat < 0) ? 'S' : 'N'),
-          fabs(sun_lon), ((sun_lon < 0) ? 'W' : 'E'));
-  len = strlen(buf);
-  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
-  x = wdth - (extents.rbearing + 10);
-  y = hght - 10;
-  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
+  if (label_orient & LABEL_TOP_FLUSH)
+  {
+    y = label_yvalue + font->ascent;
+  }
+  else
+  {
+    y = label_yvalue - font->descent;
+#ifdef DEBUG
+    y -= 3 * dy;                /* 4 lines of text */
+#else
+    y -= 2 * dy;                /* 3 lines of text */
+#endif
+  }
 
 #ifdef DEBUG
   frame += 1;
   sprintf(buf, "frame %d", frame);
   len = strlen(buf);
   XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
-  x = wdth - (extents.rbearing + 10);
-  y = hght - (3*dy + 10);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue - extents.lbearing;
+  else
+    x = label_xvalue - extents.rbearing;
   draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
+  y += dy;
 #endif /* DEBUG */
+
+  strftime(buf, sizeof(buf), "%d %b %y %H:%M %Z", localtime(&current_time));
+  len = strlen(buf);
+  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue - extents.lbearing;
+  else
+    x = label_xvalue - extents.rbearing;
+  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
+  y += dy;
+
+  sprintf(buf, "view %.1f %c %.1f %c",
+          fabs(view_lat), ((view_lat < 0) ? 'S' : 'N'),
+          fabs(view_lon), ((view_lon < 0) ? 'W' : 'E'));
+  len = strlen(buf);
+  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue - extents.lbearing;
+  else
+    x = label_xvalue - extents.rbearing;
+  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
+  y += dy;
+
+  sprintf(buf, "sun %.1f %c %.1f %c",
+          fabs(sun_lat), ((sun_lat < 0) ? 'S' : 'N'),
+          fabs(sun_lon), ((sun_lon < 0) ? 'W' : 'E'));
+  len = strlen(buf);
+  XTextExtents(font, buf, len, &direction, &ascent, &descent, &extents);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue - extents.lbearing;
+  else
+    x = label_xvalue - extents.rbearing;
+  draw_outlined_string(dpy, work_pix, white, black, x, y, buf, len);
+  y += dy;
 }
 
 
-static void mark_location(dpy, lat, lon, text)
-     Display *dpy;
-     double   lat;
-     double   lon;
-     char    *text;
+static void mark_location(dpy, info)
+     Display    *dpy;
+     MarkerInfo *info;
 {
-  int    x, y;
-  int    len;
-  double pos[3];
-  double tmp1, tmp2;
+  int         x, y;
+  int         len;
+  double      lat, lon;
+  double      pos[3];
+  char       *text;
+  int         direction;
+  int         ascent;
+  int         descent;
+  XCharStruct extents;
 
-  lat *= (M_PI/180);
-  lon *= (M_PI/180);
+  lat = info->lat * (M_PI/180);
+  lon = info->lon * (M_PI/180);
 
   pos[0] = sin(lon) * cos(lat);
   pos[1] = sin(lat);
   pos[2] = cos(lon) * cos(lat);
 
-  tmp1 = (cos_view_lon * pos[0]) - (sin_view_lon * pos[2]);
-  tmp2 = (sin_view_lon * pos[0]) + (cos_view_lon * pos[2]);
-  pos[0] = tmp1;
-  pos[2] = tmp2;
+  XFORM_ROTATE(pos, view_pos_info);
 
-  tmp1 = (cos_view_lat * pos[1]) - (sin_view_lat * pos[2]);
-  tmp2 = (sin_view_lat * pos[1]) + (cos_view_lat * pos[2]);
-  pos[1] = tmp1;
-  pos[2] = tmp2;
-
-  if (pos[2] <= 0) return;
+  if (proj_type == ProjTypeOrthographic)
+  {
+    /* if the marker isn't visible, return immediately
+     */
+    if (pos[2] <= 0) return;
+  }
+  else /* (proj_type == ProjTypeMercator) */
+  {
+    /* apply mercator projection
+     */
+    pos[0] = MERCATOR_X(pos[0], pos[2]);
+    pos[1] = MERCATOR_Y(pos[1]);
+  }
 
   x = XPROJECT(pos[0]);
   y = YPROJECT(pos[1]);
@@ -751,11 +1064,39 @@ static void mark_location(dpy, lat, lon, text)
   XSetForeground(dpy, gc, hlight);
   XDrawArc(dpy, work_pix, gc, x-2, y-2, 4, 4, 0, 360*64);
 
+  text = info->label;
   if (text != NULL)
   {
-    x  += 4;
-    y  += (font->ascent + font->descent) / 3;
     len = strlen(text);
+    XTextExtents(font, text, len, &direction, &ascent, &descent, &extents);
+
+    switch (info->align)
+    {
+    case MarkerAlignLeft:
+      x -= (extents.rbearing + 4);
+      y += (font->ascent + font->descent) / 3;
+      break;
+
+    case MarkerAlignRight:
+    case MarkerAlignDefault:
+      x += (extents.lbearing + 3);
+      y += (font->ascent + font->descent) / 3;
+      break;
+
+    case MarkerAlignAbove:
+      x -= (extents.rbearing - extents.lbearing) / 2;
+      y -= (extents.descent + 4);
+      break;
+
+    case MarkerAlignBelow:
+      x -= (extents.rbearing - extents.lbearing) / 2;
+      y += (extents.ascent + 5);
+      break;
+
+    default:
+      assert(0);
+    }
+
     draw_outlined_string(dpy, work_pix, hlight, black, x, y, text, len);
   }
 
@@ -848,13 +1189,13 @@ static Window GetVRoot(dpy)
  */
 
 static void updateProperty(dpy, w, name, type, format, data, nelem)
-     Display *dpy;
-     Window   w;
-     char    *name;
-     Atom     type;
-     int      format;
-     int      data;
-     int      nelem;
+     Display    *dpy;
+     Window      w;
+     const char *name;
+     Atom        type;
+     int         format;
+     int         data;
+     int         nelem;
 {
   /* intern the property name */
   Atom atom = XInternAtom(dpy, name, 0);
@@ -904,8 +1245,8 @@ static void freePrevious(dpy, w)
   /* look for existing resource allocation */
   if ((XGetWindowProperty(dpy, w, atom, 0, 1, 1 /*delete*/,
                           AnyPropertyType, &actual_type,
-			  &format, &nitems, &bytes_after,
-			  (unsigned char **) &pm) == Success) &&
+                          &format, &nitems, &bytes_after,
+                          (unsigned char **) &pm) == Success) &&
       (nitems == 1))
     if ((actual_type == XA_PIXMAP) && (format == 32) &&
         (nitems == 1) && (bytes_after == 0))
@@ -933,7 +1274,7 @@ static int xkill_handler(dpy, xev)
      Display     *dpy;
      XErrorEvent *xev;
 {
-  /* ignore any BadValue errors from the call to XKillClient() in 
+  /* ignore any BadValue errors from the call to XKillClient() in
    * freePrevious(); they should only happen if the client that
    * installed the RETAIN_PROP_NAME (_XSETROOT_ID) property on the
    * root window has already terminated

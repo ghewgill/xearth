@@ -3,21 +3,37 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: xearth.c,v 1.14 1994/05/25 06:04:04 tuna Exp $
+ * RCS $Id: xearth.c,v 1.26 1995/09/24 00:53:37 tuna Exp $
  *
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -28,8 +44,10 @@
  * NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
 #include "xearth.h"
 #include "kljcpyrt.h"
+extern int errno;
 
 #ifndef NO_SETPRIORITY
 /* apparently some systems (possibly mt.xinu 4.3bsd?) may need 
@@ -38,23 +56,34 @@
 #include <sys/resource.h>	/* for setpriority() */
 #endif
 
-#define ModeX   (0)             /* possible output_mode values */
-#define ModePPM (1)
-#define ModeGIF (2)
+#define ModeX    (0)		/* possible output_mode values */
+#define ModePPM  (1)
+#define ModeGIF  (2)
+#define ModeTest (3)
 
-void set_priority();
-void output();
-void compute_positions();
-void sun_relative_position();
-void simple_orbit();
-void set_defaults();
-int  using_x();
-void command_line();
+/* tokens in specifiers are delimited by spaces, tabs, commas, and
+ * forward slashes
+ */
+#define IsTokenDelim(x)  (((x)==' ')||((x)=='\t')||((x)==',')||((x)=='/'))
+#define NotTokenDelim(x) (!IsTokenDelim(x))
+
+int  main _P((int, char *[]));
+void set_priority _P((int));
+void output _P((void));
+void test_mode _P((void));
+void sun_relative_position _P((double *, double *));
+void simple_orbit _P((time_t, double *, double *));
+void pick_random_position _P((double *, double *));
+void set_defaults _P((void));
+int  using_x _P((int, char *[]));
+void command_line _P((int, char *[]));
 
 char    *progname;              /* program name                */
+int      proj_type;		/* projection type             */
 int      output_mode;           /* output mode (X, PPM, ...)   */
 double   view_lon;              /* viewing position longitude  */
 double   view_lat;              /* viewing position latitude   */
+double   view_rot;		/* viewing rotation (degrees)  */
 int      view_pos_type;		/* type of viewing position    */
 double   sun_rel_lon;		/* view lon, relative to sun   */
 double   sun_rel_lat;		/* view lat, relative to sun   */
@@ -71,16 +100,19 @@ int      shift_x;		/* image shift (x, pixels)     */
 int      shift_y;		/* image shift (y, pixels)     */
 int      do_stars;		/* show stars in background?   */
 double   star_freq;		/* frequency of stars          */
+int      big_stars;		/* percent of doublewide stars */
 int      do_grid;		/* show lon/lat grid?          */
 int      grid_big;		/* lon/lat grid line spacing   */
 int      grid_small;		/* dot spacing along grids     */
 int      do_label;              /* label image                 */
 int      do_markers;		/* display markers (X only)    */
+char    *markerfile;		/* for user-spec. marker info  */
 int      wait_time;             /* wait time between redraw    */
 double   time_warp;		/* passage of time multiplier  */
 int      fixed_time;		/* fixed viewing time (ssue)   */
 int      day;                   /* day side brightness (%)     */
 int      night;                 /* night side brightness (%)   */
+int      terminator;		/* terminator discontinuity, % */
 double   xgamma;		/* gamma correction (X only)   */
 int      use_two_pixmaps;	/* use two pixmaps? (X only)   */
 int      num_colors;		/* number of colors to use     */
@@ -89,6 +121,7 @@ int      priority;		/* desired process priority    */
 
 time_t start_time = 0;
 time_t current_time;
+char   errmsgbuf[1024];		/* for formatting warning/error msgs */
 
 
 int main(argc, argv)
@@ -105,9 +138,11 @@ int main(argc, argv)
   if (priority != 0)
     set_priority(priority);
 
+  srandom(((int) time(NULL)) + ((int) getpid()));
+
   output();
 
-  exit(0);
+  return 0;
 }
 
 
@@ -120,7 +155,6 @@ void set_priority(new)
      int new;
 {
   int old;
-  extern int errno;
 
   /* determine current priority of the process
    */
@@ -162,54 +196,33 @@ void set_priority(new)
 
 void output()
 {
-  void (*render)();
-
-  if (do_shade)
-    render = render_with_shading;
-  else
-    render = render_no_shading;
-
   switch (output_mode)
   {
   case ModePPM:
-    compute_positions();
-    scan_map();
-    do_dots();
-    ppm_setup(stdout);
-    render(ppm_row);
+    ppm_output();
     break;
 
   case ModeGIF:
-    compute_positions();
-    scan_map();
-    do_dots();
-    gif_setup(stdout);
-    render(gif_row);
-    gif_cleanup();
+    gif_output();
     break;
 
   case ModeX:
     if ((!do_fork) || (fork() == 0))
-    {
-      while (1)
-      {
-	compute_positions();
+      x11_output();
+    break;
 
-	/* should only do this if position has changed ... */
-	scan_map();
-	do_dots();
-
-        x11_setup();
-        render(x11_row);
-        x11_cleanup();
-        sleep((unsigned) wait_time);
-      }
-    }
+  case ModeTest:
+    test_mode();
     break;
 
   default:
     assert(0);
   }
+}
+
+
+void test_mode()
+{
 }
 
 
@@ -245,6 +258,10 @@ void compute_positions()
   else if (view_pos_type == ViewPosTypeOrbit)
   {
     simple_orbit(current_time, &view_lat, &view_lon);
+  }
+  else if (view_pos_type == ViewPosTypeRandom)
+  {
+    pick_random_position(&view_lat, &view_lon);
   }
 }
 
@@ -343,9 +360,48 @@ void simple_orbit(ssue, lat, lon)
 }
 
 
+/* pick a position (lat, lon) at random
+ */
+void pick_random_position(lat_ret, lon_ret)
+     double *lat_ret;		/* (return) latitude  */
+     double *lon_ret;		/* (return) longitude */
+{
+  int    i;
+  double pos[3];
+  double mag;
+  double s_lat, c_lat;
+  double s_lon, c_lon;
+
+  /* select a vector at random */
+  do
+  {
+    mag = 0;
+    for (i=0; i<3; i++)
+    {
+      pos[i] = ((random() % 20001) * 1e-4) - 1;
+      mag   += pos[i] * pos[i];
+    }
+  } while ((mag > 1.0) || (mag < 0.01));
+
+  /* normalize the vector */
+  mag = sqrt(mag);
+  for (i=0; i<3; i++)
+    pos[i] /= mag;
+
+  /* convert to (lat, lon) */
+  s_lat = pos[1];
+  c_lat = sqrt(1 - s_lat*s_lat);
+  s_lon = pos[0] / c_lat;
+  c_lon = pos[2] / c_lat;
+
+  *lat_ret = atan2(s_lat, c_lat) * (180/M_PI);
+  *lon_ret = atan2(s_lon, c_lon) * (180/M_PI);
+}
+
+
 /* look through the command line arguments to figure out if we're
- * using X or not (if either of the "-ppm" or "-gif" arguments is
- * found, we're not using X, otherwise we are).
+ * using X or not (if "-ppm", "-gif", or "-test" is found, we're not
+ * using X, otherwise we are).
  */
 int using_x(argc, argv)
      int   argc;
@@ -353,15 +409,17 @@ int using_x(argc, argv)
 {
   int i;
 
-  /* loop through the args, break if we find "-ppm" or "-gif"
+  /* loop through the args, break if we find "-ppm", "-gif", or
+   * "-test"
    */
   for (i=1; i<argc; i++)
     if ((strcmp(argv[i], "-ppm") == 0) ||
-	(strcmp(argv[i], "-gif") == 0))
+	(strcmp(argv[i], "-gif") == 0) ||
+	(strcmp(argv[i], "-test") == 0))
       break;
 
-  /* if we made it through the loop without finding "-ppm" or "-gif"
-   * (and breaking out), assume we're using X.
+  /* if we made it through the loop without finding "-ppm", "-gif", or
+   * "-test" (and breaking out), assume we're using X.
    */
   return (i == argc);
 }
@@ -374,28 +432,32 @@ int using_x(argc, argv)
 void set_defaults()
 {
   output_mode      = ModeX;
+  proj_type        = ProjTypeOrthographic;
   view_pos_type    = ViewPosTypeSun;
   sun_rel_lat      = 0;
   sun_rel_lon      = 0;
   compute_sun_pos  = 1;
+  view_rot         = 0;
   wdth             = 512;
   hght             = 512;
   shift_x          = 0;
   shift_y          = 0;
-  view_mag         = 0.99;
+  view_mag         = 1.0;
   do_shade         = 1;
   do_label         = 0;
   do_markers       = 1;
   wait_time        = 300;
   time_warp        = 1;
   day              = 100;
-  night            = 10;
+  night            = 5;
+  terminator       = 1;
   use_two_pixmaps  = 1;
   num_colors       = 64;
   do_fork          = 0;
   priority         = 0;
   do_stars         = 1;
   star_freq        = 0.002;
+  big_stars        = 0;
   do_grid          = 0;
   grid_big         = 6;
   grid_small       = 15;
@@ -417,11 +479,25 @@ void command_line(argc, argv)
 
   for (i=1; i<argc; i++)
   {
-    if (strcmp(argv[i], "-pos") == 0)
+    if (strcmp(argv[i], "-proj") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -proj");
+      decode_proj_type(argv[i]);
+    }
+    else if (strcmp(argv[i], "-pos") == 0)
     {
       i += 1;
       if (i >= argc) usage("missing arg to -pos");
       decode_viewing_pos(argv[i]);
+    }
+    else if (strcmp(argv[i], "-rot") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -rot");
+      sscanf(argv[i], "%lf", &view_rot);
+      if ((view_rot < -180) || (view_rot > 360))
+	fatal("viewing rotation must be between -180 and 360");
     }
     else if (strcmp(argv[i], "-sunpos") == 0)
     {
@@ -466,6 +542,12 @@ void command_line(argc, argv)
     {
       do_label = 0;
     }
+    else if (strcmp(argv[i], "-labelpos") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -labelpos");
+      warning("-labelpos not relevant for GIF or PPM output");
+    }
     else if (strcmp(argv[i], "-markers") == 0)
     {
       do_markers = 1;
@@ -474,6 +556,16 @@ void command_line(argc, argv)
     else if (strcmp(argv[i], "-nomarkers") == 0)
     {
       do_markers = 0;
+    }
+    else if (strcmp(argv[i], "-markerfile") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -markerfile");
+      warning("-markerfile not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-showmarkers") == 0)
+    {
+      warning("-showmarkers not relevant for GIF or PPM output");
     }
     else if (strcmp(argv[i], "-stars") == 0)
     {
@@ -490,6 +582,14 @@ void command_line(argc, argv)
       sscanf(argv[i], "%lf", &star_freq);
       if ((star_freq < 0) || (star_freq > 1))
 	fatal("arg to -starfreq must be between 0 and 1");
+    }
+    else if (strcmp(argv[i], "-bigstars") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -bigstars");
+      sscanf(argv[i], "%d", &big_stars);
+      if ((big_stars < 0) || (big_stars > 100))
+	fatal("arg to -bigstars must be between 0 and 100");
     }
     else if (strcmp(argv[i], "-grid") == 0)
     {
@@ -530,6 +630,14 @@ void command_line(argc, argv)
       sscanf(argv[i], "%d", &night);
       if ((night > 100) || (night < 0))
         fatal("arg to -night must be between 0 and 100");
+    }
+    else if (strcmp(argv[i], "-term") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -term");
+      sscanf(argv[i], "%d", &terminator);
+      if ((terminator > 100) || (terminator < 0))
+        fatal("arg to -term must be between 0 and 100");
     }
     else if (strcmp(argv[i], "-gamma") == 0)
     {
@@ -585,8 +693,8 @@ void command_line(argc, argv)
       i += 1;
       if (i >= argc) usage("missing arg to -ncolors");
       sscanf(argv[i], "%d", &num_colors);
-      if (num_colors < 3)
-        fatal("arg to -ncolors must be >= 3");
+      if ((num_colors < 3) || (num_colors > 1024))
+        fatal("arg to -ncolors must be between 3 and 1024");
     }
     else if (strcmp(argv[i], "-font") == 0)
     {
@@ -601,6 +709,14 @@ void command_line(argc, argv)
     else if (strcmp(argv[i], "-nofork") == 0)
     {
       do_fork = 0;
+    }
+    else if (strcmp(argv[i], "-once") == 0)
+    {
+      warning("-once not relevant for GIF or PPM output");
+    }
+    else if (strcmp(argv[i], "-noonce") == 0)
+    {
+      warning("-once not relevant for GIF or PPM output");
     }
     else if (strcmp(argv[i], "-nice") == 0)
     {
@@ -620,9 +736,13 @@ void command_line(argc, argv)
     {
       output_mode = ModeGIF;
     }
+    else if (strcmp(argv[i], "-test") == 0)
+    {
+      output_mode = ModeTest;
+    }
     else if (strcmp(argv[i], "-display") == 0)
     {
-      fatal("-display not compatible with -ppm or -gif\n");
+      warning("-display not relevant for GIF or PPM output");
     }
     else
     {
@@ -632,47 +752,96 @@ void command_line(argc, argv)
 }
 
 
-static char **tokenize(s, delim, argc_ret)
-     char *s;
-     char *delim;
-     int  *argc_ret;
+/* if efficiency really mattered here (which it doesn't), this code
+ * could definitely be made quite a bit more efficient.
+ */
+char **tokenize(s, argc_ret, msg)
+     char        *s;
+     int         *argc_ret;
+     const char **msg;
 {
-  int    flag;
   int    lim;
   int    argc;
   char **argv;
 
+  *msg = NULL;
   lim  = 4;
   argc = 0;
   argv = (char **) malloc((unsigned) sizeof(char *) * lim);
   assert(argv != NULL);
 
-  flag = 1;
-
   while (1)
   {
-    if (*s == '\0')
+    /* skip delimiters (space, tab, comma, forward slash)
+     */
+    while (1)
     {
-      break;
-    }
-    else if (strchr(delim, *s) != NULL)
-    {
+      if (NotTokenDelim(*s)) break;
       *s = '\0';
-      flag = 1;
-    }
-    else if (flag)
-    {
-      if (argc == lim)
-      {
-	lim *= 2;
-	argv = (char **) realloc(argv, (unsigned) sizeof(char *) * lim);
-	assert(argv != NULL);
-      }
-      argv[argc++] = s;
-      flag = 0;
+      s += 1;
     }
 
-    s += 1;
+    if ((*s) == '\0')
+    {
+      /* if we're at the end of s, no more tokens
+       */
+      break;
+    }
+    else if ((*s) == '#')
+    {
+      /* if we find a comment character (#), replace it
+       * with a NUL and act like we found the end s
+       */
+      *s = '\0';
+      break;
+    }
+
+    /* make sure there's room for another token
+     */
+    if (argc == lim)
+    {
+      lim *= 2;
+      argv = (char **) realloc(argv, (unsigned) sizeof(char *) * lim);
+      assert(argv != NULL);
+    }
+
+    /* get the next token
+     */
+    if ((*s) == '"')
+    {
+      /* string token
+       */
+      *s = '\0';
+      s += 1;
+      argv[argc++] = s;
+
+      while (((*s) != '"') && ((*s) != '\0'))
+	s += 1;
+
+      if ((*s) == '\0')
+      {
+	/* oops, never found closing double quote
+	 */
+	*msg = "unterminated string (missing \")";
+      }
+      else
+      {
+	/* string token terminated normally
+	 */
+	*s = '\0';
+	s += 1;
+      }
+    }
+    else
+    {
+      /* normal token
+       */
+      argv[argc++] = s;
+
+      while (NotTokenDelim(*s) &&
+	     ((*s) != '#') && ((*s) != '"') && ((*s) != '\0'))
+	s += 1;
+    }
   }
 
   *argc_ret = argc;
@@ -680,7 +849,30 @@ static char **tokenize(s, delim, argc_ret)
 }
 
 
-/* decode viewing position specifier; three possibilities:
+/* decode projection type; two possibilities:
+ *  orthographic - orthographic projection (short form: orth)
+ *  mercator     - mercator projection (short form: merc)
+ */
+void decode_proj_type(s)
+     char *s;
+{
+  if ((strcmp(s, "orthographic") == 0) || (strcmp(s, "orth") == 0))
+  {
+    proj_type = ProjTypeOrthographic;
+  }
+  else if ((strcmp(s, "mercator") == 0) || (strcmp(s, "merc") == 0))
+  {
+    proj_type = ProjTypeMercator;
+  }
+  else
+  {
+    sprintf(errmsgbuf, "unknown projection type (%s)", s);
+    fatal(errmsgbuf);
+  }
+}
+
+
+/* decode viewing position specifier; four possibilities:
  *
  *  fixed lat lon  - viewing position fixed wrt earth at (lat, lon)
  *
@@ -690,27 +882,39 @@ static char **tokenize(s, delim, argc_ret)
  *  orbit per inc  - moving viewing position following simple orbit
  *                   with period per and inclination inc
  *
+ *  random         - random viewing position
+ *
  * fields can be separated with either spaces, commas, or slashes.
  */
 void decode_viewing_pos(s)
      char *s;
 {
-  int    argc;
-  char **argv;
-  double arg1;
-  double arg2;
+  int         argc;
+  char      **argv;
+  const char *msg;
+  double      arg1;
+  double      arg2;
 
-  argv = tokenize(s, " ,/", &argc);
-  if (argc != 3)
-    fatal("wrong number of args in viewing position specifier");
+  argv = tokenize(s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "viewing position specifier: %s", msg);
+    warning(errmsgbuf);
+  }
 
-  arg1 = 0;
-  arg2 = 0;
-  sscanf(argv[1], "%lf", &arg1);
-  sscanf(argv[2], "%lf", &arg2);
+  if (argc == 3)
+  {
+    arg1 = 0;
+    arg2 = 0;
+    sscanf(argv[1], "%lf", &arg1);
+    sscanf(argv[2], "%lf", &arg2);
+  }
 
   if (strcmp(argv[0], "fixed") == 0)
   {
+    if (argc != 3)
+      fatal("wrong number of args in viewing position specifier");
+
     view_lat      = arg1;
     view_lon      = arg2;
     view_pos_type = ViewPosTypeFixed;
@@ -722,6 +926,9 @@ void decode_viewing_pos(s)
   }
   else if (strcmp(argv[0], "sunrel") == 0)
   {
+    if (argc != 3)
+      fatal("wrong number of args in viewing position specifier");
+
     sun_rel_lat   = arg1;
     sun_rel_lon   = arg2;
     view_pos_type = ViewPosTypeSun;
@@ -733,6 +940,9 @@ void decode_viewing_pos(s)
   }
   else if (strcmp(argv[0], "orbit") == 0)
   {
+    if (argc != 3)
+      fatal("wrong number of args in viewing position specifier");
+
     orbit_period  = arg1 * 3600;
     orbit_inclin  = arg2;
     view_pos_type = ViewPosTypeOrbit;
@@ -741,6 +951,13 @@ void decode_viewing_pos(s)
       fatal("orbital period must be positive");
     if ((orbit_inclin > 90) || (orbit_inclin < -90))
       fatal("orbital inclination must be between -90 and 90");
+  }
+  else if (strcmp(argv[0], "random") == 0)
+  {
+    if (argc != 1)
+      fatal("wrong number of args in viewing position specifier");
+    
+    view_pos_type = ViewPosTypeRandom;
   }
   else
   {
@@ -761,10 +978,17 @@ void decode_viewing_pos(s)
 void decode_sun_pos(s)
      char *s;
 {
-  int    argc;
-  char **argv;
+  int         argc;
+  char      **argv;
+  const char *msg;
 
-  argv = tokenize(s, " ,/", &argc);
+  argv = tokenize(s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "sun position specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+
   if (argc != 2)
     fatal("wrong number of args in sun position specifier");
 
@@ -791,10 +1015,17 @@ void decode_sun_pos(s)
 void decode_size(s)
      char *s;
 {
-  int    argc;
-  char **argv;
+  int         argc;
+  char      **argv;
+  const char *msg;
 
-  argv = tokenize(s, " ,/", &argc);
+  argv = tokenize(s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "size specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+
   if (argc != 2)
     fatal("wrong number of args in size specifier");
 
@@ -819,12 +1050,19 @@ void decode_size(s)
 void decode_shift(s)
      char *s;
 {
-  int    argc;
-  char **argv;
+  int         argc;
+  char      **argv;
+  const char *msg;
 
-  argv = tokenize(s, " ,/", &argc);
+  argv = tokenize(s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "shift specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+
   if (argc != 2)
-    fatal("wrong number of args in size specifier");
+    fatal("wrong number of args in shift specifier");
 
   sscanf(argv[0], "%d", &shift_x);
   sscanf(argv[1], "%d", &shift_y);
@@ -834,8 +1072,8 @@ void decode_shift(s)
 
 
 void xearth_bzero(buf, len)
-     char *buf;
-     int   len;
+     char    *buf;
+     unsigned len;
 {
   int *tmp;
 
@@ -915,41 +1153,43 @@ void version_info()
 
 
 void usage(msg)
-     char *msg;
+     const char *msg;
 {
   fflush(stdout);
   fprintf(stderr, "\n");
   if (msg != NULL)
     fprintf(stderr, "%s\n", msg);
   fprintf(stderr, "usage: %s\n", progname);
-  fprintf(stderr, " [-pos pos_spec] [-sunpos sun_pos_spec] [-mag factor]\n");
-  fprintf(stderr, " [-size size_spec] [-shift shift_spec] [-shade|-noshade]\n");
-  fprintf(stderr, " [-label|-nolabel] [-markers|-nomarkers] [-stars|-nostars]\n");
-  fprintf(stderr, " [-starfreq frequency] [-grid|-nogrid] [-grid1 grid1] [-grid2 grid2]\n");
-  fprintf(stderr, " [-day pct] [-night pct] [-gamma gamma_value] [-wait secs]\n");
-  fprintf(stderr, " [-timewarp timewarp_factor] [-time fixed_time] [-onepix|-twopix]\n");
-  fprintf(stderr, " [-mono|-nomono] [-ncolors num_colors] [-font font_name]\n");
-  fprintf(stderr, " [-fork|-nofork] [-nice priority] [-gif] [-ppm] [-display dpyname]\n");
-  fprintf(stderr, " [-version]\n");
+  fprintf(stderr, " [-proj proj_type] [-pos pos_spec] [-rot angle]\n");
+  fprintf(stderr, " [-sunpos sun_pos_spec] [-mag factor] [-size size_spec]\n");
+  fprintf(stderr, " [-shift shift_spec] [-shade|-noshade] [-label|-nolabel]\n");
+  fprintf(stderr, " [-labelpos geom] [-markers|-nomarkers] [-markerfile file]\n");
+  fprintf(stderr, " [-showmarkers] [-stars|-nostars] [-starfreq frequency]\n");
+  fprintf(stderr, " [-bigstars percent] [-grid|-nogrid] [-grid1 grid1] [-grid2 grid2]\n");
+  fprintf(stderr, " [-day pct] [-night pct] [-term pct] [-gamma gamma_value]\n");
+  fprintf(stderr, " [-wait secs] [-timewarp factor] [-time fixed_time]\n");
+  fprintf(stderr, " [-onepix|-twopix] [-mono|-nomono] [-ncolors num_colors]\n");
+  fprintf(stderr, " [-font font_name] [-fork|-nofork] [-once|-noonce]\n");
+  fprintf(stderr, " [-nice priority] [-gif] [-ppm] [-display dpyname] [-version]\n");
   fprintf(stderr, "\n");
   exit(1);
 }
 
 
 void warning(msg)
-     char *msg;
+     const char *msg;
 {
   fflush(stdout);
-  fprintf(stderr, "\n%s: warning - %s\n", progname, msg);
+  fprintf(stderr, "xearth %s: warning - %s\n", VersionString, msg);
   fflush(stderr);
 }
 
 
 void fatal(msg)
-     char *msg;
+     const char *msg;
 {
   fflush(stdout);
-  fprintf(stderr, "\n%s: fatal - %s\n", progname, msg);
+  fprintf(stderr, "xearth %s: fatal - %s\n", VersionString, msg);
   fprintf(stderr, "\n");
   exit(1);
 }

@@ -1,9 +1,9 @@
 /*
- * extarr.h
+ * port.h
  * kirk johnson
- * july 1993
+ * september 1995
  *
- * RCS $Id: extarr.h,v 1.5 1995/09/24 00:42:28 tuna Exp $
+ * RCS $Id: port.h,v 1.2 1995/09/24 00:45:47 tuna Exp $
  *
  * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
@@ -45,19 +45,28 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef _EXTARR_H_
-#define _EXTARR_H_
+#ifndef _PORT_H_
+#define _PORT_H_
 
-typedef struct extarr
-{
-  unsigned eltsize;
-  unsigned limit;
-  unsigned count;
-  void    *body;
-} *ExtArr;
+/* Allow prototypes throughout */
+#if __STDC__
+#define _P(x) x
+#else
+#define _P(x) ()
+#endif
 
-extern ExtArr extarr_alloc _P((unsigned));
-extern void   extarr_free _P((ExtArr));
-extern void  *extarr_next _P((ExtArr));
+/* Allow use of "const" */
+#if !defined(__GNUC__)
+#ifndef const
+#define const
+#endif
+#endif
+
+/* Allow use of GNU's __attribute__((noreturn)) */
+#if __GNUC__ > 1
+#define _noreturn __attribute__((noreturn))
+#else
+#define _noreturn
+#endif
 
 #endif

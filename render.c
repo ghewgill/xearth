@@ -3,21 +3,37 @@
  * kirk johnson
  * october 1993
  *
- * RCS $Id: render.c,v 1.7 1994/05/23 23:03:01 tuna Exp $
+ * RCS $Id: render.c,v 1.20 1995/09/25 01:10:37 tuna Exp $
  *
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -32,12 +48,25 @@
 #include "xearth.h"
 #include "kljcpyrt.h"
 
-static void new_stars();
-static void new_grid();
+static void new_stars _P((double));
+static void new_grid _P((int, int));
+static void new_grid_dot _P((double *, double *));
+static int dot_comp _P((const void *, const void *));
+static void render_rows_setup _P((void));
+static void render_next_row _P((s8or32 *, int));
+static void no_shade_row _P((s8or32 *, u_char *));
+static void compute_sun_vector _P((double *));
+static void orth_compute_inv_x _P((double *));
+static void orth_shade_row _P((int, s8or32 *, double *, double *, u_char *));
+static void merc_shade_row _P((int, s8or32 *, double *, u_char *));
 
 static int      scanbitcnt;
 static ScanBit *scanbit;
-static u_char   scan_to_pix[256];
+static s8or32   scan_to_pix[256];
+
+static int    night_val;
+static int    day_val_base;
+static double day_val_delta;
 
 static ExtArr   dots = NULL;
 static int      dotcnt;
@@ -45,10 +74,10 @@ static ScanDot *dot;
 
 
 static int dot_comp(a, b)
-     void *a;
-     void *b;
+     const void *a;
+     const void *b;
 {
-  return (((ScanDot *) a)->y - ((ScanDot *) b)->y);
+  return (((const ScanDot *) a)->y - ((const ScanDot *) b)->y);
 }
 
 
@@ -75,15 +104,15 @@ static void render_rows_setup()
 
 
 static void render_next_row(buf, idx)
-     char *buf;
-     int   idx;
+     s8or32 *buf;
+     int     idx;
 {
   int      i, i_lim;
   int      tmp;
   int      _scanbitcnt;
   ScanBit *_scanbit;
 
-  xearth_bzero((char *) buf, wdth);
+  xearth_bzero((char *) buf, (unsigned) (sizeof(s8or32) * wdth));
 
   /* explicitly copy scanbitcnt and scanbit to local variables
    * to help compilers figure out that they can be registered
@@ -96,8 +125,9 @@ static void render_next_row(buf, idx)
     /* use i_lim to encourage compilers to register loop limit
      */
     i_lim = _scanbit->hi_x;
+    tmp   = _scanbit->val;
     for (i=_scanbit->lo_x; i<=i_lim; i++)
-      buf[i] += _scanbit->val;
+      buf[i] += tmp;
 
     _scanbit    += 1;
     _scanbitcnt -= 1;
@@ -112,7 +142,7 @@ static void render_next_row(buf, idx)
    */
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
-    buf[i] = scan_to_pix[(u_char) buf[i]];
+    buf[i] = scan_to_pix[(int) (buf[i] & 0xff)];
 
   while ((dotcnt > 0) && (dot->y == idx))
   {
@@ -121,19 +151,19 @@ static void render_next_row(buf, idx)
     if (dot->type == DotTypeStar)
     {
       if (buf[tmp] == PixTypeSpace)
-	buf[tmp] = PixTypeStar;
+        buf[tmp] = PixTypeStar;
     }
     else
     {
       switch (buf[tmp])
       {
       case PixTypeLand:
-	buf[tmp] = PixTypeGridLand;
-	break;
+        buf[tmp] = PixTypeGridLand;
+        break;
 
       case PixTypeWater:
-	buf[tmp] = PixTypeGridWater;
-	break;
+        buf[tmp] = PixTypeGridWater;
+        break;
       }
     }
 
@@ -143,201 +173,329 @@ static void render_next_row(buf, idx)
 }
 
 
-void render_no_shading(rowfunc)
-     void (*rowfunc)();
+static void no_shade_row(scanbuf, rslt)
+     s8or32 *scanbuf;
+     u_char *rslt;
 {
-  int     i, i_lim;
-  int     j, j_lim;
-  char   *scanbuf;
-  u_char *row;
-  u_char *tmp;
+  int i, i_lim;
 
-  scanbuf = (char *) malloc((unsigned) wdth);
-  assert(scanbuf != NULL);
-  row = (u_char *) malloc((unsigned) wdth*3);
-  assert(row != NULL);
-  render_rows_setup();
-
-  /* main render loop
-   * (use i_lim and j_lim to encourage compilers to register loop limits)
+  /* use i_lim to encourage compilers to register loop limit
    */
-  i_lim = hght;
-  j_lim = wdth;
+  i_lim = wdth;
   for (i=0; i<i_lim; i++)
   {
-    render_next_row(scanbuf, i);
-
-    tmp = row;
-    for (j=0; j<j_lim; j++)
+    switch (scanbuf[i])
     {
-      switch (scanbuf[j])
-      {
-      case PixTypeSpace:	/* black */
-	tmp[0] = 0;
-	tmp[1] = 0;
-	tmp[2] = 0;
-	break;
+    case PixTypeSpace:        /* black */
+      rslt[0] = 0;
+      rslt[1] = 0;
+      rslt[2] = 0;
+      break;
 
-      case PixTypeStar:		/* white */
-      case PixTypeGridLand:
-      case PixTypeGridWater:
-        tmp[0] = 255;
-        tmp[1] = 255;
-        tmp[2] = 255;
-	break;
+    case PixTypeStar:         /* white */
+    case PixTypeGridLand:
+    case PixTypeGridWater:
+      rslt[0] = 255;
+      rslt[1] = 255;
+      rslt[2] = 255;
+      break;
 
-      case PixTypeLand:		/* green */
-        tmp[0] = 0;
-        tmp[1] = 255;
-        tmp[2] = 0;
-	break;
+    case PixTypeLand:         /* green */
+      rslt[0] = 0;
+      rslt[1] = 255;
+      rslt[2] = 0;
+      break;
 
-      case PixTypeWater:	/* blue */
-        tmp[0] = 0;
-        tmp[1] = 0;
-        tmp[2] = 255;
-	break;
+    case PixTypeWater:        /* blue */
+      rslt[0] = 0;
+      rslt[1] = 0;
+      rslt[2] = 255;
+      break;
 
-      default:
-	assert(0);
-      }
-
-      tmp += 3;
+    default:
+      assert(0);
     }
 
-    rowfunc(row);
+    rslt += 3;
   }
-
-  free(scanbuf);
-  free(row);
 }
 
 
-void render_with_shading(rowfunc)
-     void (*rowfunc)();
+static void compute_sun_vector(rslt)
+     double *rslt;
 {
-  int     i, i_lim;
-  int     j, j_lim;
-  int     base_val;
-  double  delta_val;
-  int     val;
-  char   *scanbuf;
-  u_char *row;
-  u_char *tmp;
-  double  tmp1, tmp2;
-  double  x, y, z;
-  double  sol[3];
-  double  scale;
-  double *inv_x;
+  rslt[0] = sin(sun_lon * (M_PI/180)) * cos(sun_lat * (M_PI/180));
+  rslt[1] = sin(sun_lat * (M_PI/180));
+  rslt[2] = cos(sun_lon * (M_PI/180)) * cos(sun_lat * (M_PI/180));
 
-  scanbuf = (char *) malloc((unsigned) wdth);
-  assert(scanbuf != NULL);
-  row = (u_char *) malloc((unsigned) wdth*3);
-  assert(row != NULL);
-  render_rows_setup();
+  XFORM_ROTATE(rslt, view_pos_info);
+}
 
-  sol[0] = sin(sun_lon * (M_PI/180)) * cos(sun_lat * (M_PI/180));
-  sol[1] = sin(sun_lat * (M_PI/180));
-  sol[2] = cos(sun_lon * (M_PI/180)) * cos(sun_lat * (M_PI/180));
 
-  tmp1 = (cos_view_lon * sol[0]) - (sin_view_lon * sol[2]);
-  tmp2 = (sin_view_lon * sol[0]) + (cos_view_lon * sol[2]);
-  sol[0] = tmp1;
-  sol[2] = tmp2;
+static void orth_compute_inv_x(inv_x)
+     double *inv_x;
+{
+  int i, i_lim;
 
-  tmp1 = (cos_view_lat * sol[1]) - (sin_view_lat * sol[2]);
-  tmp2 = (sin_view_lat * sol[1]) + (cos_view_lat * sol[2]);
-  sol[1] = tmp1;
-  sol[2] = tmp2;
-
-  /* precompute INV_XPROJECT() values
-   * (use i_lim to encourage compilers to register loop limit)
-   */
-  inv_x = (double *) malloc((unsigned) sizeof(double) * wdth);
-  assert(inv_x != NULL);
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
     inv_x[i] = INV_XPROJECT(i);
+}
 
-  /* precompute shading parameters */
-  base_val  = (night * 255.99) / 100;
-  delta_val = (day * 255.99) / 100 - base_val;
 
-  /* main render loop
-   * (use i_lim and j_lim to encourage compilers to register loop limits)
+static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
+     int     idx;
+     s8or32 *scanbuf;
+     double *sol;
+     double *inv_x;
+     u_char *rslt;
+{
+  int    i, i_lim;
+  int    val;
+  double x, y, z;
+  double scale;
+  double tmp;
+
+  y = INV_YPROJECT(idx);
+
+  /* save a little computation in the inner loop
    */
-  i_lim = hght;
-  j_lim = wdth;
+  tmp = 1 - (y*y);
+
+  /* use i_lim to encourage compilers to register loop limit
+   */
+  i_lim = wdth;
   for (i=0; i<i_lim; i++)
   {
-    y = INV_YPROJECT(i);
-    render_next_row(scanbuf, i);
-
-    tmp = row;
-    for (j=0; j<j_lim; j++)
+    switch (scanbuf[i])
     {
-      switch (scanbuf[j])
+    case PixTypeSpace:        /* black */
+      rslt[0] = 0;
+      rslt[1] = 0;
+      rslt[2] = 0;
+      break;
+
+    case PixTypeStar:         /* white */
+    case PixTypeGridLand:
+    case PixTypeGridWater:
+      rslt[0] = 255;
+      rslt[1] = 255;
+      rslt[2] = 255;
+      break;
+
+    case PixTypeLand:         /* green, blue */
+    case PixTypeWater:
+      x = inv_x[i];
+      z = tmp - (x*x);
+      z = SQRT(z);
+      scale = x*sol[0] + y*sol[1] + z*sol[2];
+      if (scale < 0)
       {
-      case PixTypeSpace:	/* black */
-	tmp[0] = 0;
-	tmp[1] = 0;
-	tmp[2] = 0;
-	break;
-
-      case PixTypeStar:		/* white */
-      case PixTypeGridLand:
-      case PixTypeGridWater:
-        tmp[0] = 255;
-        tmp[1] = 255;
-        tmp[2] = 255;
-	break;
-
-      case PixTypeLand:		/* green */
-      case PixTypeWater:
-        x = inv_x[j];
-        z = 1 - x*x - y*y;
-        z = SQRT(z);
-        scale = x*sol[0] + y*sol[1] + z*sol[2];
-        if (scale < 0)
-        {
-          val = base_val;
-        }
-        else
-        {
-	  val = base_val + scale*delta_val;
-	  if (val > 255) val = 255;
-        }
-        assert(val >= 0);
-
-        if (scanbuf[j] == 1)
-        {
-          /* land (green) */
-          tmp[0] = 0;
-          tmp[1] = val;
-          tmp[2] = 0;
-        }
-        else
-        {
-          /* water (blue) */
-          tmp[0] = 0;
-          tmp[1] = 0;
-          tmp[2] = val;
-        }
-	break;
-
-      default:
-	assert(0);
+	val = night_val;
+      }
+      else
+      {
+	val = day_val_base + (scale * day_val_delta);
+	if (val > 255)
+	  val = 255;
+	else
+	  assert(val >= 0);
       }
 
-      tmp += 3;
+      if (scanbuf[i] == PixTypeLand)
+      {
+	/* land (green) */
+	rslt[0] = 0;
+	rslt[1] = val;
+	rslt[2] = 0;
+      }
+      else
+      {
+	/* water (blue) */
+	rslt[0] = 0;
+	rslt[1] = 0;
+	rslt[2] = val;
+      }
+      break;
+
+    default:
+      assert(0);
     }
+
+    rslt += 3;
+  }
+}
+
+
+static void merc_shade_row(idx, scanbuf, sol, rslt)
+     int     idx;
+     s8or32 *scanbuf;
+     double *sol;
+     u_char *rslt;
+{
+  int    i, i_lim;
+  int    val;
+  double x, y, z;
+  double sin_theta;
+  double cos_theta;
+  double scale;
+  double tmp;
+
+  y = INV_YPROJECT(idx);
+  y = INV_MERCATOR_Y(y);
+
+  /* conceptually, on each iteration of the i loop, we want:
+   *
+   *   x = sin(INV_XPROJECT(i)) * sqrt(1 - (y*y));
+   *   z = cos(INV_XPROJECT(i)) * sqrt(1 - (y*y));
+   *
+   * computing this directly is rather expensive, however, so we only
+   * compute the first (i=0) pair of values directly; all other pairs
+   * (i>0) are obtained through successive rotations of the original
+   * pair (by inv_proj_scale radians).
+   */
+
+  /* compute initial (x, z) values
+   */
+  tmp = sqrt(1 - (y*y));
+  x   = sin(INV_XPROJECT(0)) * tmp;
+  z   = cos(INV_XPROJECT(0)) * tmp;
+
+  /* compute rotation coefficients used
+   * to find subsequent (x, z) values
+   */
+  tmp = inv_proj_scale;
+  sin_theta = sin(tmp);
+  cos_theta = cos(tmp);
+
+  /* use i_lim to encourage compilers to register loop limit
+   */
+  i_lim = wdth;
+  for (i=0; i<i_lim; i++)
+  {
+    switch (scanbuf[i])
+    {
+    case PixTypeSpace:        /* black */
+      rslt[0] = 0;
+      rslt[1] = 0;
+      rslt[2] = 0;
+      break;
+
+    case PixTypeStar:         /* white */
+    case PixTypeGridLand:
+    case PixTypeGridWater:
+      rslt[0] = 255;
+      rslt[1] = 255;
+      rslt[2] = 255;
+      break;
+
+    case PixTypeLand:         /* green, blue */
+    case PixTypeWater:
+      scale = x*sol[0] + y*sol[1] + z*sol[2];
+      if (scale < 0)
+      {
+	val = night_val;
+      }
+      else
+      {
+	val = day_val_base + (scale * day_val_delta);
+	if (val > 255)
+	  val = 255;
+	else
+	  assert(val >= 0);
+      }
+
+      if (scanbuf[i] == PixTypeLand)
+      {
+	/* land (green) */
+	rslt[0] = 0;
+	rslt[1] = val;
+	rslt[2] = 0;
+      }
+      else
+      {
+	/* water (blue) */
+	rslt[0] = 0;
+	rslt[1] = 0;
+	rslt[2] = val;
+      }
+      break;
+
+    default:
+      assert(0);
+    }
+
+    /* compute next (x, z) values via 2-d rotation
+     */
+    tmp = (cos_theta * z) - (sin_theta * x);
+    x   = (sin_theta * z) + (cos_theta * x);
+    z   = tmp;
+
+    rslt += 3;
+  }
+}
+
+
+void render(rowfunc)
+     void (*rowfunc) _P((u_char *));
+{
+  int     i, i_lim;
+  s8or32 *scanbuf;
+  u_char *row;
+  double *inv_x;
+  double  sol[3];
+  double  tmp;
+
+  scanbuf = (s8or32 *) malloc((unsigned) (sizeof(s8or32) * wdth));
+  row = (u_char *) malloc((unsigned) wdth*3);
+  assert((scanbuf != NULL) && (row != NULL));
+
+  inv_x = NULL;
+  render_rows_setup();
+
+  if (do_shade)
+  {
+    /* inv_x[] only gets used with orthographic projection
+     */
+    if (proj_type == ProjTypeOrthographic)
+    {
+      inv_x = (double *) malloc((unsigned) sizeof(double) * wdth);
+      assert(inv_x != NULL);
+      orth_compute_inv_x(inv_x);
+    }
+
+    compute_sun_vector(sol);
+
+    /* precompute shading parameters
+     */
+    night_val     = night * (255.99/100.0);
+    tmp           = terminator / 100.0;
+    day_val_base  = ((tmp * day) + ((1-tmp) * night))  * (255.99/100.0);
+    day_val_delta = (day * (255.99/100.0)) - day_val_base;
+  }
+
+  /* main render loop
+   * (use i_lim to encourage compilers to register loop limit)
+   */
+  i_lim = hght;
+  for (i=0; i<i_lim; i++)
+  {
+    render_next_row(scanbuf, i);
+
+    if (!do_shade)
+      no_shade_row(scanbuf, row);
+    else if (proj_type == ProjTypeOrthographic)
+      orth_shade_row(i, scanbuf, sol, inv_x, row);
+    else
+      merc_shade_row(i, scanbuf, sol, row);
 
     rowfunc(row);
   }
 
   free(scanbuf);
   free(row);
-  free(inv_x);
+
+  if (inv_x != NULL) free(inv_x);
 }
 
 
@@ -374,6 +532,14 @@ static void new_stars(freq)
     newdot->x    = x;
     newdot->y    = y;
     newdot->type = DotTypeStar;
+
+    if ((big_stars) && (x+1 < wdth) && ((random() % 100) < big_stars))
+    {
+      newdot = (ScanDot *) extarr_next(dots);
+      newdot->x    = x+1;
+      newdot->y    = y;
+      newdot->type = DotTypeStar;
+    }
   }
 }
 
@@ -382,16 +548,12 @@ static void new_grid(big, small)
      int big;
      int small;
 {
-  int      i, j;
-  int      x, y;
-  int      cnt;
-  double   lat, lon;
-  double   lat_scale, lon_scale;
-  double   cos_lat, sin_lat;
-  double   cos_lon, sin_lon;
-  double   pos[3];
-  double   tmp1, tmp2;
-  ScanDot *newdot;
+  int    i, j;
+  int    cnt;
+  double lat, lon;
+  double lat_scale, lon_scale;
+  double cs_lat[2];
+  double cs_lon[2];
 
   /* lines of longitude
    */
@@ -399,42 +561,17 @@ static void new_grid(big, small)
   lat_scale = M_PI / (2 * big * small);
   for (i=(-2*big); i<(2*big); i++)
   {
-    lon     = i * lon_scale;
-    cos_lon = cos(lon);
-    sin_lon = sin(lon);
+    lon       = i * lon_scale;
+    cs_lon[0] = cos(lon);
+    cs_lon[1] = sin(lon);
 
     for (j=(-(big*small)+1); j<(big*small); j++)
     {
-      lat     = j * lat_scale;
-      cos_lat = cos(lat);
-      sin_lat = sin(lat);
+      lat       = j * lat_scale;
+      cs_lat[0] = cos(lat);
+      cs_lat[1] = sin(lat);
 
-      pos[0] = sin_lon * cos_lat;
-      pos[1] = sin_lat;
-      pos[2] = cos_lon * cos_lat;
-
-      tmp1 = (cos_view_lon * pos[0]) - (sin_view_lon * pos[2]);
-      tmp2 = (sin_view_lon * pos[0]) + (cos_view_lon * pos[2]);
-      pos[0] = tmp1;
-      pos[2] = tmp2;
-
-      tmp1 = (cos_view_lat * pos[1]) - (sin_view_lat * pos[2]);
-      tmp2 = (sin_view_lat * pos[1]) + (cos_view_lat * pos[2]);
-      pos[1] = tmp1;
-      pos[2] = tmp2;
-
-      if (pos[2] >= 0)
-      {
-	x = XPROJECT(pos[0]);
-	y = YPROJECT(pos[1]);
-	if ((x >= 0) && (x < wdth) && (y >= 0) && (y < hght))
-	{
-	  newdot = (ScanDot *) extarr_next(dots);
-	  newdot->x    = x;
-	  newdot->y    = y;
-	  newdot->type = DotTypeGrid;
-	}
-      }
+      new_grid_dot(cs_lat, cs_lon);
     }
   }
 
@@ -444,43 +581,59 @@ static void new_grid(big, small)
   for (i=(1-big); i<big; i++)
   {
     lat       = i * lat_scale;
-    cos_lat   = cos(lat);
-    sin_lat   = sin(lat);
-    cnt       = 2 * ((int) ((cos_lat * small) + 0.5)) * big;
+    cs_lat[0] = cos(lat);
+    cs_lat[1] = sin(lat);
+    cnt       = 2 * ((int) ((cs_lat[0] * small) + 0.5)) * big;
     lon_scale = M_PI / cnt;
 
     for (j=(-cnt); j<cnt; j++)
     {
-      lon     = j * lon_scale;
-      cos_lon = cos(lon);
-      sin_lon = sin(lon);
+      lon       = j * lon_scale;
+      cs_lon[0] = cos(lon);
+      cs_lon[1] = sin(lon);
 
-      pos[0] = sin_lon * cos_lat;
-      pos[1] = sin_lat;
-      pos[2] = cos_lon * cos_lat;
-
-      tmp1 = (cos_view_lon * pos[0]) - (sin_view_lon * pos[2]);
-      tmp2 = (sin_view_lon * pos[0]) + (cos_view_lon * pos[2]);
-      pos[0] = tmp1;
-      pos[2] = tmp2;
-
-      tmp1 = (cos_view_lat * pos[1]) - (sin_view_lat * pos[2]);
-      tmp2 = (sin_view_lat * pos[1]) + (cos_view_lat * pos[2]);
-      pos[1] = tmp1;
-      pos[2] = tmp2;
-
-      if (pos[2] >= 0)
-      {
-	x = XPROJECT(pos[0]);
-	y = YPROJECT(pos[1]);
-	if ((x >= 0) && (x < wdth) && (y >= 0) && (y < hght))
-	{
-	  newdot = (ScanDot *) extarr_next(dots);
-	  newdot->x    = x;
-	  newdot->y    = y;
-	  newdot->type = DotTypeGrid;
-	}
-      }
+      new_grid_dot(cs_lat, cs_lon);
     }
+  }
+}
+
+
+static void new_grid_dot(cs_lat, cs_lon)
+     double *cs_lat;
+     double *cs_lon;
+{
+  int      x, y;
+  double   pos[3];
+  ScanDot *new;
+
+  pos[0] = cs_lon[1] * cs_lat[0];
+  pos[1] = cs_lat[1];
+  pos[2] = cs_lon[0] * cs_lat[0];
+
+  XFORM_ROTATE(pos, view_pos_info);
+
+  if (proj_type == ProjTypeOrthographic)
+  {
+    /* if the grid dot isn't visible, return immediately
+     */
+    if (pos[2] <= 0) return;
+  }
+  else /* (proj_type == ProjTypeMercator) */
+  {
+    /* apply mercator projection
+     */
+    pos[0] = MERCATOR_X(pos[0], pos[2]);
+    pos[1] = MERCATOR_Y(pos[1]);
+  }
+
+  x = XPROJECT(pos[0]);
+  y = YPROJECT(pos[1]);
+
+  if ((x >= 0) && (x < wdth) && (y >= 0) && (y < hght))
+  {
+    new = (ScanDot *) extarr_next(dots);
+    new->x    = x;
+    new->y    = y;
+    new->type = DotTypeGrid;
   }
 }

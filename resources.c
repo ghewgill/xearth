@@ -2,7 +2,7 @@
  * resources.c
  * march 1994
  *
- * RCS $Id: resources.c,v 1.6 1994/05/20 01:37:40 tuna Exp $
+ * RCS $Id: resources.c,v 1.7 1995/09/24 00:48:31 tuna Exp $
  *
  * this file is copied essentially verbatim from the sources for Jamie
  * Zawinski's xscreensaver package; his original copyright notice
@@ -25,6 +25,7 @@
 #include <X11/Xos.h>
 #include <X11/Xlib.h>
 #include <X11/Xresource.h>
+#include "port.h"
 
 /* Resource functions.  Assumes: */
 
@@ -39,9 +40,20 @@ extern XrmDatabase db;
 # define _tolower(c)  ((c) - 'A' + 'a')
 #endif
 
+char               *get_string_resource _P((const char *, const char *));
+int                 get_boolean_resource _P((const char *, const char *));
+int                 get_integer_resource _P((const char *, const char *));
+double              get_float_resource _P((const char *, const char *));
+unsigned int        get_pixel_resource _P((const char *, const char *,
+                      Display *, Colormap));
+int                 parse_time _P((const char *, int, int));
+static unsigned int get_time_resource _P((const char *, const char *, int));
+unsigned int        get_seconds_resource _P((const char *, const char *));
+unsigned int        get_minutes_resource _P((const char *, const char *));
+
 char *
 get_string_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   XrmValue value;
   char	*type;
@@ -64,7 +76,7 @@ get_string_resource (res_name, res_class)
 
 int 
 get_boolean_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   char *tmp, buf [100];
   char *s = get_string_resource (res_name, res_class);
@@ -86,7 +98,7 @@ get_boolean_resource (res_name, res_class)
 
 int 
 get_integer_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   int val;
   char c, *s = get_string_resource (res_name, res_class);
@@ -104,7 +116,7 @@ get_integer_resource (res_name, res_class)
 
 double
 get_float_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   double val;
   char c, *s = get_string_resource (res_name, res_class);
@@ -123,7 +135,7 @@ get_float_resource (res_name, res_class)
 
 unsigned int
 get_pixel_resource (res_name, res_class, dpy, cmap)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
      Display *dpy;
      Colormap cmap;
 {
@@ -153,7 +165,7 @@ get_pixel_resource (res_name, res_class, dpy, cmap)
 
 int
 parse_time (string, seconds_default_p, silent_p)
-     char *string;
+     const char *string;
      Bool seconds_default_p, silent_p;
 {
   unsigned int h, m, s;
@@ -196,7 +208,7 @@ parse_time (string, seconds_default_p, silent_p)
 
 static unsigned int 
 get_time_resource (res_name, res_class, sec_p)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
      Bool sec_p;
 {
   int val;
@@ -209,14 +221,14 @@ get_time_resource (res_name, res_class, sec_p)
 
 unsigned int 
 get_seconds_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   return get_time_resource (res_name, res_class, True);
 }
 
 unsigned int 
 get_minutes_resource (res_name, res_class)
-     char *res_name, *res_class;
+     const char *res_name, *res_class;
 {
   return get_time_resource (res_name, res_class, False);
 }

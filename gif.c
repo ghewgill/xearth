@@ -3,21 +3,37 @@
  * kirk johnson
  * july 1993
  *
- * RCS $Id: gif.c,v 1.5 1994/05/20 01:37:40 tuna Exp $
+ * RCS $Id: gif.c,v 1.12 1995/09/25 01:09:42 tuna Exp $
  *
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -33,18 +49,36 @@
 #include "giflib.h"
 #include "kljcpyrt.h"
 
-static u_char *dith;
+static void gif_setup _P((FILE *));
+static void gif_row _P((u_char *));
+static void gif_cleanup _P((void));
+
+static u16or32 *dith;
 
 
-void gif_setup(s)
+void gif_output()
+{
+  compute_positions();
+  scan_map();
+  do_dots();
+  gif_setup(stdout);
+  render(gif_row);
+  gif_cleanup();
+}
+
+
+static void gif_setup(s)
      FILE *s;
 {
   int  i;
   int  rtn;
   BYTE cmap[3][256];
 
+  if (num_colors > 256)
+    fatal("number of colors must be <= 256 with GIF output");
+
   dither_setup(num_colors);
-  dith = (u_char *) malloc((unsigned) wdth);
+  dith = (u16or32 *) malloc((unsigned) sizeof(u16or32) * wdth);
   assert(dith != NULL);
 
   for (i=0; i<dither_ncolors; i++)
@@ -62,19 +96,24 @@ void gif_setup(s)
 }
 
 
-void gif_row(row)
+static void gif_row(row)
      u_char *row;
 {
-  int i;
+  int      i, i_lim;
+  u16or32 *tmp;
 
-  dither_row(row, dith);
+  tmp = dith;
+  dither_row(row, tmp);
 
-  for (i=0; i<wdth; i++)
-    gifout_put_pixel(dith[i]);
+  /* use i_lim to encourage compilers to register loop limit
+   */
+  i_lim = wdth;
+  for (i=0; i<i_lim; i++)
+    gifout_put_pixel((int) tmp[i]);
 }
 
 
-void gif_cleanup()
+static void gif_cleanup()
 {
   int rtn;
 

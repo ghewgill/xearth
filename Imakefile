@@ -1,16 +1,37 @@
 XCOMM Imakefile for xearth
-XCOMM RCS $Id: Imakefile,v 1.7 1994/05/20 01:37:40 tuna Exp $
+XCOMM RCS $Id: Imakefile,v 1.9 1995/08/30 21:40:29 tuna Exp $
 XCOMM
-XCOMM Copyright (C) 1994 Kirk Lauritz Johnson
+XCOMM Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
 XCOMM
-XCOMM Permission to use, copy, modify, distribute, and sell this
-XCOMM software and its documentation for any purpose is hereby granted
-XCOMM without fee, provided that the above copyright notice appear in
-XCOMM all copies and that both that copyright notice and this
-XCOMM permission notice appear in supporting documentation. The author
-XCOMM makes no representations about the suitability of this software
-XCOMM for any purpose. It is provided "as is" without express or
-XCOMM implied warranty.
+XCOMM Parts of the source code (as marked) are:
+XCOMM   Copyright (C) 1989, 1990, 1991 by Jim Frost
+XCOMM   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
+XCOMM
+XCOMM Permission to use, copy, modify and freely distribute xearth for
+XCOMM non-commercial and not-for-profit purposes is hereby granted
+XCOMM without fee, provided that both the above copyright notice and
+XCOMM this permission notice appear in all copies and in supporting
+XCOMM documentation.
+XCOMM
+XCOMM Unisys Corporation holds worldwide patent rights on the Lempel
+XCOMM Zev Welch (LZW) compression technique employed in the CompuServe
+XCOMM GIF image file format as well as in other formats. Unisys has
+XCOMM made it clear, however, that it does not require licensing or
+XCOMM fees to be paid for freely distributed, non-commercial
+XCOMM applications (such as xearth) that employ LZW/GIF
+XCOMM technology. Those wishing further information about licensing
+XCOMM the LZW patent should contact Unisys directly at
+XCOMM (lzw_info@unisys.com) or by writing to
+XCOMM
+XCOMM   Unisys Corporation
+XCOMM   Welch Licensing Department
+XCOMM   M/S-C1SW19
+XCOMM   P.O. Box 500
+XCOMM   Blue Bell, PA 19424
+XCOMM
+XCOMM The author makes no representations about the suitability of
+XCOMM this software for any purpose. It is provided "as is" without
+XCOMM express or implied warranty.
 XCOMM
 XCOMM THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
 XCOMM SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
@@ -23,9 +44,11 @@ XCOMM THIS SOFTWARE.
 
         DEFINES = 
            SRCS = xearth.c dither.c extarr.c gif.c gifout.c mapdata.c \
-                  ppm.c render.c resources.c scan.c sunpos.c x11.c
+                  markers.c ppm.c render.c resources.c scan.c sunpos.c \
+                  x11.c
            OBJS = xearth.o dither.o extarr.o gif.o gifout.o mapdata.o \
-                  ppm.o render.o resources.o scan.o sunpos.o x11.o
+                  markers.o ppm.o render.o resources.o scan.o sunpos.o \
+                  x11.o
         DEPLIBS = $(DEPXTOOLLIB) $(DEPXLIB)
 LOCAL_LIBRARIES = $(XTOOLLIB) $(XLIB)
   SYS_LIBRARIES = -lm

@@ -3,21 +3,37 @@
  * kirk johnson
  * may 1990
  *
- * RCS $Id: gifout.c,v 1.4 1994/05/20 01:37:40 tuna Exp $
+ * RCS $Id: gifout.c,v 1.7 1995/09/24 05:28:01 tuna Exp $
  *
- * Copyright (C) 1989, 1990, 1993, 1994 Kirk Lauritz Johnson
+ * Copyright (C) 1989, 1990, 1993, 1994, 1995 Kirk Lauritz Johnson
  *
  * Parts of the source code (as marked) are:
  *   Copyright (C) 1989, 1990, 1991 by Jim Frost
  *   Copyright (C) 1992 by Jamie Zawinski <jwz@lucid.com>
  *
- * Permission to use, copy, modify, distribute, and sell this
- * software and its documentation for any purpose is hereby granted
- * without fee, provided that the above copyright notice appear in
- * all copies and that both that copyright notice and this
- * permission notice appear in supporting documentation. The author
- * makes no representations about the suitability of this software
- * for any purpose. It is provided "as is" without express or
+ * Permission to use, copy, modify and freely distribute xearth for
+ * non-commercial and not-for-profit purposes is hereby granted
+ * without fee, provided that both the above copyright notice and this
+ * permission notice appear in all copies and in supporting
+ * documentation.
+ *
+ * Unisys Corporation holds worldwide patent rights on the Lempel Zev
+ * Welch (LZW) compression technique employed in the CompuServe GIF
+ * image file format as well as in other formats. Unisys has made it
+ * clear, however, that it does not require licensing or fees to be
+ * paid for freely distributed, non-commercial applications (such as
+ * xearth) that employ LZW/GIF technology. Those wishing further
+ * information about licensing the LZW patent should contact Unisys
+ * directly at (lzw_info@unisys.com) or by writing to
+ *
+ *   Unisys Corporation
+ *   Welch Licensing Department
+ *   M/S-C1SW19
+ *   P.O. Box 500
+ *   Blue Bell, PA 19424
+ *
+ * The author makes no representations about the suitability of this
+ * software for any purpose. It is provided "as is" without express or
  * implied warranty.
  *
  * THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
@@ -30,6 +46,7 @@
  */
 
 #include <stdio.h>
+#include "port.h"
 #include "gifint.h"
 #include "kljcpyrt.h"
 
@@ -72,14 +89,14 @@
  **
  ****/
 
-static int  cmap_bits();
-static int  root_bits();
-static void put_clr_code();
-static void write_data_block();
-static void reset_string_out();
-static void add_string_out();
-static int  find_string_out();
-static void gifout_fatal();
+static int  cmap_bits _P((int));
+static int  root_bits _P((int));
+static void put_clr_code _P((void));
+static void write_data_block _P((int, BYTE *, FILE *));
+static void reset_string_out _P((void));
+static void add_string_out _P((int, int));
+static int  find_string_out _P((int, int));
+static void gifout_fatal _P((const char *)) _noreturn;
 
 
 static BYTE file_open  = 0;     /* status flags */
@@ -108,8 +125,7 @@ static int  buf_idx;            /* buffer index */
 
 static int table_size;          /* string table size */
 static int htable[HASHSZ];
-static int prefix[STAB_SIZE];
-static int extnsn[STAB_SIZE];
+static int pref_extn[STAB_SIZE]; /* (prefix << 16) | extension */
 static int next[STAB_SIZE];
 
 
@@ -122,10 +138,10 @@ static int next[STAB_SIZE];
 /*
  * open a GIF file for writing on stream s
  */
-int gifout_open_file(s, wdth, hght, sz, cmap, bg)
+int gifout_open_file(s, w, h, sz, cmap, bg)
      FILE *s;
-     int   wdth;                /* raster width (in pixels) */
-     int   hght;                /* raster height (in pixels) */
+     int   w;                   /* raster width (in pixels) */
+     int   h;                   /* raster height (in pixels) */
      int   sz;                  /* number of colors */
      BYTE  cmap[3][256];        /* global colormap */
      int   bg;                  /* background color index */
@@ -140,8 +156,8 @@ int gifout_open_file(s, wdth, hght, sz, cmap, bg)
   /* remember that we've got this file open */
   file_open   = 1;
   outs        = s;
-  rast_width  = wdth;
-  rast_height = hght;
+  rast_width  = w;
+  rast_height = h;
 
   /* write GIF signature */
   if (fwrite(GIF_SIG, sizeof(char), GIF_SIG_LEN, outs) != GIF_SIG_LEN)
@@ -151,10 +167,10 @@ int gifout_open_file(s, wdth, hght, sz, cmap, bg)
   pixel_bits = cmap_bits(sz);
   ncolors    = 1 << pixel_bits;
 
-  buf[0] = (wdth & 0x00FF);
-  buf[1] = (wdth & 0xFF00) >> 8;
-  buf[2] = (hght & 0x00FF);
-  buf[3] = (hght & 0xFF00) >> 8;
+  buf[0] = (w & 0x00FF);
+  buf[1] = (w & 0xFF00) >> 8;
+  buf[2] = (h & 0x00FF);
+  buf[3] = (h & 0xFF00) >> 8;
   buf[4] = (pixel_bits - 1) | 0x80;
   buf[5] = bg;
   buf[6] = 0;
@@ -191,11 +207,11 @@ int gifout_open_file(s, wdth, hght, sz, cmap, bg)
 /*
  * open a new GIF image for writing in the current GIF file
  */
-int gifout_open_image(left, top, wdth, hght)
+int gifout_open_image(left, top, w, h)
      int left;                  /* column index for left edge */
      int top;                   /* row index for top edge */
-     int wdth;                  /* image width (in pixels) */
-     int hght;                  /* image height (in pixels) */
+     int w;                     /* image width (in pixels) */
+     int h;                     /* image height (in pixels) */
 {
   /* make sure there's a file open */
   if (!file_open)
@@ -207,8 +223,8 @@ int gifout_open_image(left, top, wdth, hght)
 
   /* remember that we've got this image open */
   image_open = 1;
-  img_width  = wdth;
-  img_height = hght;
+  img_width  = w;
+  img_height = h;
 
   /* write image separator */
   putc(GIF_SEPARATOR, outs);
@@ -218,10 +234,10 @@ int gifout_open_image(left, top, wdth, hght)
   buf[1] = (left & 0xFF00) >> 8;
   buf[2] = (top  & 0x00FF);
   buf[3] = (top  & 0xFF00) >> 8;
-  buf[4] = (wdth & 0x00FF);
-  buf[5] = (wdth & 0xFF00) >> 8;
-  buf[6] = (hght & 0x00FF);
-  buf[7] = (hght & 0xFF00) >> 8;
+  buf[4] = (w & 0x00FF);
+  buf[5] = (w & 0xFF00) >> 8;
+  buf[6] = (h & 0x00FF);
+  buf[7] = (h & 0xFF00) >> 8;
   buf[8] = 0;
 
   if (fwrite(buf, sizeof(BYTE), GIF_ID_SIZE, outs) != GIF_ID_SIZE)
@@ -478,11 +494,9 @@ static void add_string_out(p, e)
 
   idx = HASH(p, e);
 
-  prefix[table_size] = p;
-  extnsn[table_size] = e;
-
-  next[table_size] = htable[idx];
-  htable[idx]      = table_size;
+  pref_extn[table_size] = (p << 16) | e;
+  next[table_size]      = htable[idx];
+  htable[idx]           = table_size;
 
   if ((table_size > code_mask) && (code_size < 12))
   {
@@ -499,6 +513,7 @@ static int find_string_out(p, e)
      int e;
 {
   int idx;
+  int tmp;
   int rslt;
 
   if (p == NULL_CODE)
@@ -512,8 +527,10 @@ static int find_string_out(p, e)
 
     /* search the hash table */
     idx = htable[HASH(p, e)];
+    tmp = (p << 16) | e;
     while (idx != NULL_CODE)
-      if ((prefix[idx] == p) && (extnsn[idx] == e))
+    {
+      if (pref_extn[idx] == tmp)
       {
         rslt = idx;
         break;
@@ -522,6 +539,7 @@ static int find_string_out(p, e)
       {
         idx = next[idx];
       }
+    }
   }
 
   return rslt;
@@ -532,7 +550,7 @@ static int find_string_out(p, e)
  * semi-graceful fatal error mechanism
  */
 static void gifout_fatal(msg)
-     char *msg;
+     const char *msg;
 {
   fprintf(stderr, "\n");
   fprintf(stderr, "gifout.c: fatal error\n");
