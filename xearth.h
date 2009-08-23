@@ -46,7 +46,12 @@
 #ifndef _XEARTH_H_
 #define _XEARTH_H_
 
+#ifdef HAVE_X11
 #include <X11/Xos.h>
+#else
+typedef unsigned char u_char;
+typedef unsigned short u_short;
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>

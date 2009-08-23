@@ -130,7 +130,11 @@ int main(argc, argv)
   set_defaults();
 
   if (using_x(argc, argv))
+#ifdef HAVE_X11
     command_line_x(argc, argv);
+#else
+    exit(1);
+#endif
   else
     command_line(argc, argv);
 
@@ -205,10 +209,12 @@ void output()
     gif_output();
     break;
 
+#ifdef HAVE_X11
   case ModeX:
     if ((!do_fork) || (fork() == 0))
       x11_output();
     break;
+#endif
 
   case ModeTest:
     test_mode();
