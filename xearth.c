@@ -575,7 +575,6 @@ void command_line(argc, argv)
     else if (strcmp(argv[i], "-label") == 0)
     {
       do_label = 1;
-      warning("labeling not supported with GIF and PPM output");
     }
     else if (strcmp(argv[i], "-nolabel") == 0)
     {

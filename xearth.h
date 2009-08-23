@@ -257,6 +257,10 @@ extern void    mono_dither_setup _P((void));
 extern void    mono_dither_row _P((u_char *, u16or32 *));
 extern void    mono_dither_cleanup _P((void));
 
+/* font.c */
+extern void    font_extent _P((const char *, int *, int *));
+extern void    font_draw _P((int, int, const char *, ExtArr));
+
 /* gif.c */
 extern void gif_output _P((void));
 

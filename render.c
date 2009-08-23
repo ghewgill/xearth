@@ -46,9 +46,13 @@
 #include "xearth.h"
 #include "kljcpyrt.h"
 
+#define LABEL_LEFT_FLUSH (1<<0)
+#define LABEL_TOP_FLUSH  (1<<1)
+
 static void new_stars _P((double));
 static void new_grid _P((int, int));
 static void new_grid_dot _P((double *, double *));
+static void new_label _P((void));
 static int dot_comp _P((const void *, const void *));
 static void render_rows_setup _P((void));
 static void render_next_row _P((s8or32 *, int));
@@ -615,6 +619,7 @@ void do_dots()
 
   if (do_stars) new_stars(star_freq);
   if (do_grid) new_grid(grid_big, grid_small);
+  if (do_label) new_label();
 
   qsort(dots->body, dots->count, sizeof(ScanDot), dot_comp);
 }
@@ -750,4 +755,60 @@ static void new_grid_dot(cs_lat, cs_lon)
     new->y    = y;
     new->type = DotTypeGrid;
   }
+}
+
+
+static void new_label()
+{
+  int         dy;
+  int         x, y;
+  int label_orient = LABEL_LEFT_FLUSH | LABEL_TOP_FLUSH;
+  int label_xvalue = 5;
+  int label_yvalue = 5;
+  int height;
+  int width;
+  char buf[128];
+
+  font_extent("", &dy, &width);
+
+  if (label_orient & LABEL_TOP_FLUSH)
+  {
+    y = label_yvalue;
+  }
+  else
+  {
+    y = (hght + label_yvalue) - dy;
+    y -= 2 * dy;                /* 3 lines of text */
+  }
+
+  strftime(buf, sizeof(buf), "%d %b %Y %H:%M %Z", gmtime(&current_time));
+  font_extent(buf, &height, &width);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue;
+  else
+    x = (wdth + label_xvalue) - width;
+  font_draw(x, y, buf, dots);
+  y += dy;
+
+  sprintf(buf, "view %.1f %c %.1f %c",
+          fabs(view_lat), ((view_lat < 0) ? 'S' : 'N'),
+          fabs(view_lon), ((view_lon < 0) ? 'W' : 'E'));
+  font_extent(buf, &height, &width);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue;
+  else
+    x = (wdth + label_xvalue) - width;
+  font_draw(x, y, buf, dots);
+  y += dy;
+
+  sprintf(buf, "sun %.1f %c %.1f %c",
+          fabs(sun_lat), ((sun_lat < 0) ? 'S' : 'N'),
+          fabs(sun_lon), ((sun_lon < 0) ? 'W' : 'E'));
+  font_extent(buf, &height, &width);
+  if (label_orient & LABEL_LEFT_FLUSH)
+    x = label_xvalue;
+  else
+    x = (wdth + label_xvalue) - width;
+  font_draw(x, y, buf, dots);
+  y += dy;
 }
