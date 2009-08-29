@@ -126,7 +126,53 @@ static void render_next_row(buf, idx)
     i_lim = _scanbit->hi_x;
     tmp   = _scanbit->val;
     for (i=_scanbit->lo_x; i<=i_lim; i++)
+    {
       buf[i] += tmp;
+      //ViewPosInfo inv;
+      //inv.cos_lon =  view_pos_info.cos_rot;
+      //inv.sin_lon = -view_pos_info.sin_rot;
+      //inv.cos_lat =  view_pos_info.cos_lat;
+      //inv.sin_lat = -view_pos_info.sin_lat;
+      //inv.cos_rot =  view_pos_info.cos_lon;
+      //inv.sin_rot = -view_pos_info.sin_lon;
+      double q[3];
+      q[0] = INV_XPROJECT(i);
+      q[1] = INV_YPROJECT(idx);
+      q[2] = sqrt(1 - (q[0]*q[0] + q[1]*q[1]));
+      //fprintf(stderr, "idx=%d, i=%d, q=%g,%g,%g\n", idx, i, q[0], q[1], q[2]);
+      //XFORM_ROTATE(q, inv);
+      {
+        double _p0_, _p1_, _p2_;
+        double _c_, _s_, _t_;
+        _p0_ = q[0];
+        _p1_ = q[1];
+        _p2_ = q[2];
+        _c_  = view_pos_info.cos_rot;
+        _s_  = -view_pos_info.sin_rot;
+        _t_  = (_c_ * _p0_) - (_s_ * _p1_);
+        _p1_ = (_s_ * _p0_) + (_c_ * _p1_);
+        _p0_ = _t_;
+        _c_  = view_pos_info.cos_lat;
+        _s_  = -view_pos_info.sin_lat;
+        _t_  = (_c_ * _p1_) - (_s_ * _p2_);
+        _p2_ = (_s_ * _p1_) + (_c_ * _p2_);
+        _p1_ = _t_;
+        _c_  = view_pos_info.cos_lon;
+        _s_  = -view_pos_info.sin_lon;
+        _t_  = (_c_ * _p0_) - (_s_ * _p2_);
+        _p2_ = (_s_ * _p0_) + (_c_ * _p2_);
+        _p0_ = _t_;
+        q[0] = _p0_;
+        q[1] = _p1_;
+        q[2] = _p2_;
+      }
+      //fprintf(stderr, "               q=%g,%g,%g\n", q[0], q[1], q[2]);
+      double lat = asin(q[1]);
+      double lon = atan2(q[0], q[2]);
+      //if ((idx+i) & 1) {
+        buf[i] = overlay_pixel(lat, lon);
+      //}
+    }
 
     _scanbit    += 1;
     _scanbitcnt -= 1;
@@ -490,6 +536,7 @@ void render(rowfunc)
   scanbuf = (s8or32 *) malloc((unsigned) (sizeof(s8or32) * wdth));
   row = (u_char *) malloc((unsigned) wdth*3);
   assert((scanbuf != NULL) && (row != NULL));
+  overlay_init();
 
   inv_x = NULL;
   render_rows_setup();
@@ -535,6 +582,7 @@ void render(rowfunc)
     rowfunc(row);
   }
 
+  overlay_close();
   free(scanbuf);
   free(row);
 
