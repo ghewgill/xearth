@@ -58,7 +58,8 @@ extern int errno;
 #define ModePPM  (1)
 #define ModeGIF  (2)
 #define ModePNG  (3)
-#define ModeTest (4)
+#define ModeJPEG (4)
+#define ModeTest (5)
 
 /* tokens in specifiers are delimited by spaces, tabs, commas, and
  * forward slashes
@@ -212,6 +213,10 @@ void output()
 
   case ModePNG:
     png_output();
+    break;
+
+  case ModeJPEG:
+    jpeg_output();
     break;
 
 #ifdef HAVE_X11
@@ -421,7 +426,7 @@ void pick_random_position(lat_ret, lon_ret)
 
 
 /* look through the command line arguments to figure out if we're
- * using X or not (if "-ppm", "-gif", "-png", or "-test" is found, we're not
+ * using X or not (if "-ppm", "-gif", "-png", "-jpeg", or "-test" is found, we're not
  * using X, otherwise we are).
  */
 int using_x(argc, argv)
@@ -430,17 +435,18 @@ int using_x(argc, argv)
 {
   int i;
 
-  /* loop through the args, break if we find "-ppm", "-gif", "-png", or
+  /* loop through the args, break if we find "-ppm", "-gif", "-png", "-jpeg", or
    * "-test"
    */
   for (i=1; i<argc; i++)
     if ((strcmp(argv[i], "-ppm") == 0) ||
         (strcmp(argv[i], "-gif") == 0) ||
         (strcmp(argv[i], "-png") == 0) ||
+        (strcmp(argv[i], "-jpeg") == 0) ||
         (strcmp(argv[i], "-test") == 0))
       break;
 
-  /* if we made it through the loop without finding "-ppm", "-gif", "-png", or
+  /* if we made it through the loop without finding "-ppm", "-gif", "-png", "-jpeg", or
    * "-test" (and breaking out), assume we're using X.
    */
   return (i == argc);
@@ -449,7 +455,7 @@ int using_x(argc, argv)
 
 /* set_defaults() gets called at xearth startup (before command line
  * arguments are handled), regardless of what output mode (x, ppm,
- * gif, png) is being used.
+ * gif, png, jpeg) is being used.
  */
 void set_defaults()
 {
@@ -784,6 +790,10 @@ void command_line(argc, argv)
     else if (strcmp(argv[i], "-png") == 0)
     {
       output_mode = ModePNG;
+    }
+    else if (strcmp(argv[i], "-jpeg") == 0)
+    {
+      output_mode = ModeJPEG;
     }
     else if (strcmp(argv[i], "-test") == 0)
     {
@@ -1274,7 +1284,7 @@ void usage(msg)
   fprintf(stderr, " [-onepix|-twopix] [-mono|-nomono] [-ncolors num_colors]\n");
   fprintf(stderr, " [-font font_name] [-root|-noroot] [-geometry geom] [-title title]\n");
   fprintf(stderr, " [-iconname iconname] [-name name] [-fork|-nofork] [-once|-noonce]\n");
-  fprintf(stderr, " [-nice priority] [-gif] [-png] [-ppm] [-display dpyname] [-version]\n");
+  fprintf(stderr, " [-nice priority] [-gif] [-png] [-jpeg] [-ppm] [-display dpyname] [-version]\n");
   fprintf(stderr, "\n");
   exit(1);
 }
