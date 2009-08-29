@@ -183,37 +183,9 @@ static void no_shade_row(scanbuf, rslt)
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
   {
-    switch (scanbuf[i])
-    {
-    case PixTypeSpace:        /* black */
-      rslt[0] = 0;
-      rslt[1] = 0;
-      rslt[2] = 0;
-      break;
-
-    case PixTypeStar:         /* white */
-    case PixTypeGridLand:
-    case PixTypeGridWater:
-      rslt[0] = 255;
-      rslt[1] = 255;
-      rslt[2] = 255;
-      break;
-
-    case PixTypeLand:         /* green */
-      rslt[0] = 0;
-      rslt[1] = 255;
-      rslt[2] = 0;
-      break;
-
-    case PixTypeWater:        /* blue */
-      rslt[0] = 0;
-      rslt[1] = 0;
-      rslt[2] = 255;
-      break;
-
-    default:
-      assert(0);
-    }
+    rslt[0] = PixRed(scanbuf[i]);
+    rslt[1] = PixGreen(scanbuf[i]);
+    rslt[2] = PixBlue(scanbuf[i]);
 
     rslt += 3;
   }
@@ -273,22 +245,16 @@ static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
 
     switch (scanbuf_val)
     {
-    case PixTypeSpace:        /* black */
-      rslt[0] = 0;
-      rslt[1] = 0;
-      rslt[2] = 0;
-      break;
-
-    case PixTypeStar:         /* white */
+    case PixTypeSpace:
+    case PixTypeStar:
     case PixTypeGridLand:
     case PixTypeGridWater:
-      rslt[0] = 255;
-      rslt[1] = 255;
-      rslt[2] = 255;
+      rslt[0] = PixRed(scanbuf_val);
+      rslt[1] = PixGreen(scanbuf_val);
+      rslt[2] = PixBlue(scanbuf_val);
       break;
 
-    case PixTypeLand:         /* green, blue */
-    case PixTypeWater:
+    default:
       x = inv_x[i];
       z = tmp - (x*x);
       z = SQRT(z);
@@ -306,24 +272,10 @@ static void orth_shade_row(idx, scanbuf, sol, inv_x, rslt)
 	  assert(val >= 0);
       }
 
-      if (scanbuf_val == PixTypeLand)
-      {
-	/* land (green) */
-	rslt[0] = 0;
-	rslt[1] = val;
-	rslt[2] = 0;
-      }
-      else
-      {
-	/* water (blue) */
-	rslt[0] = 0;
-	rslt[1] = 0;
-	rslt[2] = val;
-      }
+      rslt[0] = PixRed(scanbuf_val) * val / 255;
+      rslt[1] = PixGreen(scanbuf_val) * val / 255;
+      rslt[2] = PixBlue(scanbuf_val) * val / 255;
       break;
-
-    default:
-      assert(0);
     }
 
     rslt += 3;
@@ -387,22 +339,16 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
 
     switch (scanbuf_val)
     {
-    case PixTypeSpace:        /* black */
-      rslt[0] = 0;
-      rslt[1] = 0;
-      rslt[2] = 0;
-      break;
-
-    case PixTypeStar:         /* white */
+    case PixTypeSpace:
+    case PixTypeStar:
     case PixTypeGridLand:
     case PixTypeGridWater:
-      rslt[0] = 255;
-      rslt[1] = 255;
-      rslt[2] = 255;
+      rslt[0] = PixRed(scanbuf_val);
+      rslt[1] = PixGreen(scanbuf_val);
+      rslt[2] = PixBlue(scanbuf_val);
       break;
 
-    case PixTypeLand:         /* green, blue */
-    case PixTypeWater:
+    default:
       scale = (x * sol[0]) + y_sol_1 + (z * sol[2]);
       if (scale < 0)
       {
@@ -417,24 +363,10 @@ static void merc_shade_row(idx, scanbuf, sol, rslt)
 	  assert(val >= 0);
       }
 
-      if (scanbuf_val == PixTypeLand)
-      {
-	/* land (green) */
-	rslt[0] = 0;
-	rslt[1] = val;
-	rslt[2] = 0;
-      }
-      else
-      {
-	/* water (blue) */
-	rslt[0] = 0;
-	rslt[1] = 0;
-	rslt[2] = val;
-      }
+      rslt[0] = PixRed(scanbuf_val) * val / 255;
+      rslt[1] = PixGreen(scanbuf_val) * val / 255;
+      rslt[2] = PixBlue(scanbuf_val) * val / 255;
       break;
-
-    default:
-      assert(0);
     }
 
     /* compute next (x, z) values via 2-d rotation
@@ -504,22 +436,16 @@ static void cyl_shade_row(idx, scanbuf, sol, rslt)
 
     switch (scanbuf_val)
     {
-    case PixTypeSpace:        /* black */
-      rslt[0] = 0;
-      rslt[1] = 0;
-      rslt[2] = 0;
-      break;
-
-    case PixTypeStar:         /* white */
+    case PixTypeSpace:
+    case PixTypeStar:
     case PixTypeGridLand:
     case PixTypeGridWater:
-      rslt[0] = 255;
-      rslt[1] = 255;
-      rslt[2] = 255;
+      rslt[0] = PixRed(scanbuf_val);
+      rslt[1] = PixGreen(scanbuf_val);
+      rslt[2] = PixBlue(scanbuf_val);
       break;
 
-    case PixTypeLand:         /* green, blue */
-    case PixTypeWater:
+    default:
       scale = (x * sol[0]) + y_sol_1 + (z * sol[2]);
       if (scale < 0)
       {
@@ -534,24 +460,10 @@ static void cyl_shade_row(idx, scanbuf, sol, rslt)
 	  assert(val >= 0);
       }
 
-      if (scanbuf_val == PixTypeLand)
-      {
-	/* land (green) */
-	rslt[0] = 0;
-	rslt[1] = val;
-	rslt[2] = 0;
-      }
-      else
-      {
-	/* water (blue) */
-	rslt[0] = 0;
-	rslt[1] = 0;
-	rslt[2] = val;
-      }
+      rslt[0] = PixRed(scanbuf_val) * val / 255;
+      rslt[1] = PixGreen(scanbuf_val) * val / 255;
+      rslt[2] = PixBlue(scanbuf_val) * val / 255;
       break;
-
-    default:
-      assert(0);
     }
 
     /* compute next (x, z) values via 2-d rotation

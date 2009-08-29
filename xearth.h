@@ -94,12 +94,16 @@ typedef unsigned short u_short;
 
 /* types of pixels
  */
-#define PixTypeSpace     (0)
-#define PixTypeLand      (1)
-#define PixTypeWater     (2)
-#define PixTypeStar      (3)
-#define PixTypeGridLand  (4)
-#define PixTypeGridWater (5)
+#define PixTypeSpace     (0x80000000) /* black */
+#define PixTypeLand      (0x8100ff00) /* green */
+#define PixTypeWater     (0x820000ff) /* blue  */
+#define PixTypeStar      (0x83ffffff) /* white */
+#define PixTypeGridLand  (0x84ffffff) /* white */
+#define PixTypeGridWater (0x85ffffff) /* white */
+
+#define PixRed(p)   (((p) >> 16) & 0xff)
+#define PixGreen(p) (((p) >>  8) & 0xff)
+#define PixBlue(p)  (((p)      ) & 0xff)
 
 /* types of dots
  */
@@ -189,21 +193,10 @@ typedef unsigned short u_short;
 #define INV_XPROJECT(x) (((x)-proj_info.proj_xofs)*proj_info.inv_proj_scale)
 #define INV_YPROJECT(y) ((proj_info.proj_yofs-(y))*proj_info.inv_proj_scale)
 
-#ifdef __alpha
-/* on alpha systems, trade off space for more efficient access
- */
 typedef int      s8or32;
 typedef unsigned u8or32;
 typedef int      s16or32;
 typedef unsigned u16or32;
-#else
-/* other systems can access 8- and 16-bit items efficiently
- */
-typedef char           s8or32;
-typedef unsigned char  u8or32;
-typedef short          s16or32;
-typedef unsigned short u16or32;
-#endif
 
 typedef struct
 {
