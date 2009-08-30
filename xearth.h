@@ -104,6 +104,7 @@ typedef unsigned short u_short;
 #define PixRed(p)   (((p) >> 16) & 0xff)
 #define PixGreen(p) (((p) >>  8) & 0xff)
 #define PixBlue(p)  (((p)      ) & 0xff)
+#define PixRGB(r,g,b) ((((r) & 0xff) << 16) | (((g) & 0xff) << 8) | ((b) & 0xff))
 
 /* types of dots
  */

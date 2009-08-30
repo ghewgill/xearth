@@ -128,19 +128,27 @@ static void render_next_row(buf, idx)
     for (i=_scanbit->lo_x; i<=i_lim; i++)
     {
       buf[i] += tmp;
-      //ViewPosInfo inv;
-      //inv.cos_lon =  view_pos_info.cos_rot;
-      //inv.sin_lon = -view_pos_info.sin_rot;
-      //inv.cos_lat =  view_pos_info.cos_lat;
-      //inv.sin_lat = -view_pos_info.sin_lat;
-      //inv.cos_rot =  view_pos_info.cos_lon;
-      //inv.sin_rot = -view_pos_info.sin_lon;
+      double ix = INV_XPROJECT(i);
+      double iy = INV_YPROJECT(idx);
       double q[3];
-      q[0] = INV_XPROJECT(i);
-      q[1] = INV_YPROJECT(idx);
-      q[2] = sqrt(1 - (q[0]*q[0] + q[1]*q[1]));
-      //fprintf(stderr, "idx=%d, i=%d, q=%g,%g,%g\n", idx, i, q[0], q[1], q[2]);
-      //XFORM_ROTATE(q, inv);
+      switch (proj_type) {
+      case ProjTypeOrthographic:
+          q[0] = ix;
+          q[1] = iy;
+          q[2] = sqrt(1 - (q[0]*q[0] + q[1]*q[1]));
+          break;
+      case ProjTypeMercator:
+          q[0] = sin(ix);
+          q[1] = INV_MERCATOR_Y(iy);
+          q[2] = cos(ix);
+          break;
+      case ProjTypeCylindrical:
+          q[0] = sin(ix);
+          q[1] = INV_CYLINDRICAL_Y(iy);
+          q[2] = cos(ix);
+          break;
+      }
+      /* inverse of XFORM_ROTATE */
       {
         double _p0_, _p1_, _p2_;
         double _c_, _s_, _t_;
@@ -166,12 +174,12 @@ static void render_next_row(buf, idx)
         q[1] = _p1_;
         q[2] = _p2_;
       }
-      //fprintf(stderr, "               q=%g,%g,%g\n", q[0], q[1], q[2]);
       double lat = asin(q[1]);
       double lon = atan2(q[0], q[2]);
-      //if ((idx+i) & 1) {
-        buf[i] = overlay_pixel(lat, lon);
-      //}
+      int p = overlay_pixel(lat, lon);
+      if (p != -1) {
+          buf[i] = 0x40000000 | p;
+      }
     }
 
     _scanbit    += 1;
@@ -187,7 +195,10 @@ static void render_next_row(buf, idx)
    */
   i_lim = wdth;
   for (i=0; i<i_lim; i++)
-    buf[i] = scan_to_pix[(int) (buf[i] & 0xff)];
+  {
+    if ((buf[i] & 0x40000000) == 0)
+      buf[i] = scan_to_pix[(int) (buf[i] & 0xff)];
+  }
 
   while ((dotcnt > 0) && (dot->y == idx))
   {
@@ -200,16 +211,7 @@ static void render_next_row(buf, idx)
     }
     else
     {
-      switch (buf[tmp])
-      {
-      case PixTypeLand:
-        buf[tmp] = PixTypeGridLand;
-        break;
-
-      case PixTypeWater:
-        buf[tmp] = PixTypeGridWater;
-        break;
-      }
+      buf[tmp] = PixTypeGridLand;
     }
 
     dot    += 1;

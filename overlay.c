@@ -1,47 +1,86 @@
+#include "xearth.h"
+
 #include <gd.h>
 
-#include "xearth.h"
+#define ImageUnknown (0)
+#define ImageGif     (1)
+#define ImagePng     (2)
+#define ImageJpeg    (3)
+
+static int image_type _P((FILE *));
 
 static gdImagePtr overlay;
 
 void overlay_init()
 {
-    FILE *f = fopen("TRKWLDUS.GIF", "rb");
-    overlay = gdImageCreateFromGif(f);
-    fclose(f);
-
-    {
-        /*int lat, lon;
-        char buf[20];
-        int font = gdFontGetSmall();
-        int c = gdImageColorAllocate(overlay, 255, 255, 255);
-        for (lat = -90; lat <= 90; lat += 15) {
-            for (lon = -180; lon < 180; lon += 30) {
-                fprintf(stderr, "lat=%d, lon=%d\n", lat, lon);
-                double rlat = lat * (M_PI/180);
-                double rlon = lon * (M_PI/180);
-                int x = (int) ((rlon + M_PI) * gdImageSX(overlay) / (2*M_PI));
-                int y = (int) (-rlat * gdImageSY(overlay) / M_PI * 1.4 + gdImageSY(overlay)/2);
-                fprintf(stderr, "x=%d, y=%d\n", x, y);
-                gdImageSetPixel(overlay, x, y, c);
-                sprintf(buf, "%d,%d", lat, lon);
-                gdImageString(overlay, font, x, y, buf, c);
-            }
-        }*/
-        f = fopen("world.gif", "wb");
-        gdImageGif(overlay, f);
-        fclose(f);
+    //const char *fn = "TRKWLDUS.GIF";
+    const char *fn = "world.topo.bathy.200407.3x5400x2700.jpg";
+    FILE *f = fopen(fn, "rb");
+    if (f == NULL) {
+        fprintf(stderr, "xearth: warning: file not found: %s\n", fn);
+        return;
     }
+    switch (image_type(f)) {
+    case ImageGif:
+        overlay = gdImageCreateFromGif(f);
+        break;
+    case ImagePng:
+        overlay = gdImageCreateFromPng(f);
+        break;
+    case ImageJpeg:
+        overlay = gdImageCreateFromJpeg(f);
+        break;
+    default:
+        fprintf(stderr, "xearth: warning: unknown image file format: %s\n", fn);
+        overlay = NULL;
+        break;
+    }
+    fclose(f);
 }
 
 int overlay_pixel(double lat, double lon)
 {
+    if (overlay == NULL) {
+        return -1;
+    }
     int x = (int) ((lon + M_PI) * gdImageSX(overlay) / (2*M_PI));
-    int y = (int) (-lat * gdImageSY(overlay) / M_PI * 1.4 + gdImageSY(overlay)/2);
-    return gdImageGetPixel(overlay, x, y);
+    double r = 1.0; //gdImageSX(overlay) / (gdImageSY(overlay) * 2.0);
+    int y = (int) (-lat * gdImageSY(overlay) / M_PI * r + gdImageSY(overlay)/2);
+    if (x < 0 || x >= gdImageSX(overlay) || y < 0 || y >= gdImageSY(overlay)) {
+        return -1;
+    }
+    int c = gdImageGetPixel(overlay, x, y);
+    return PixRGB(gdImageRed(overlay, c), gdImageGreen(overlay, c), gdImageBlue(overlay, c));
 }
 
 void overlay_close()
 {
-    gdImageDestroy(overlay);
+    if (overlay != NULL) {
+        gdImageDestroy(overlay);
+    }
+    overlay = NULL;
+}
+
+static int image_type(f)
+    FILE *f;
+{
+  int r = ImageUnknown;
+  u_char buf[8];
+
+  fread(buf, 1, sizeof(buf), f);
+  if (memcmp(buf, "GIF8", 4) == 0)
+  {
+    r = ImageGif;
+  }
+  else if (memcmp(buf, "\x89PNG", 4) == 0)
+  {
+    r = ImagePng;
+  }
+  else if (memcmp(buf, "\xff\xd8", 2) == 0)
+  {
+    r = ImageJpeg;
+  }
+  fseek(f, 0, SEEK_SET);
+
+  return r;
 }
