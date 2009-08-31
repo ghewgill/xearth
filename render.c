@@ -109,6 +109,7 @@ static void render_next_row(buf, idx)
   int      i, i_lim;
   int      tmp;
   int      _scanbitcnt;
+  double   t;
   ScanBit *_scanbit;
 
   xearth_bzero((char *) buf, (unsigned) (sizeof(s8or32) * wdth));
@@ -135,17 +136,19 @@ static void render_next_row(buf, idx)
       case ProjTypeOrthographic:
           q[0] = ix;
           q[1] = iy;
-          q[2] = sqrt(1 - (q[0]*q[0] + q[1]*q[1]));
+          q[2] = sqrt(1 - (ix*ix + iy*iy));
           break;
       case ProjTypeMercator:
-          q[0] = sin(ix);
           q[1] = INV_MERCATOR_Y(iy);
-          q[2] = cos(ix);
+          t = sqrt(1 - q[1]*q[1]);
+          q[0] = sin(ix) * t;
+          q[2] = cos(ix) * t;
           break;
       case ProjTypeCylindrical:
-          q[0] = sin(ix);
           q[1] = INV_CYLINDRICAL_Y(iy);
-          q[2] = cos(ix);
+          t = sqrt(1 - q[1]*q[1]);
+          q[0] = sin(ix) * t;
+          q[2] = cos(ix) * t;
           break;
       }
       /* inverse of XFORM_ROTATE */
