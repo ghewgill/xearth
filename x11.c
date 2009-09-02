@@ -85,8 +85,8 @@ static void         x11_setup _P((void));
 static void         pack_mono_1 _P((u16or32 *, u_char *));
 static void         pack_8 _P((u16or32 *, Pixel *, u_char *));
 static void         pack_16 _P((u16or32 *, Pixel *, u_char *));
-static void         pack_24 _P((u16or32 *, Pixel *, u_char *));
-static void         pack_32 _P((u16or32 *, Pixel *, u_char *));
+static void         pack_24 _P((u_char *, u_char *));
+static void         pack_32 _P((u_char *, u_char *));
 static int          x11_row _P((u_char *));
 static void         x11_cleanup _P((void));
 static void         draw_label _P((Display *));
@@ -1057,13 +1057,11 @@ static void pack_16(src, map, dst)
 
 /* pack pixels into ximage format (assuming bits_per_pixel == 24)
  */
-static void pack_24(src, map, dst)
-     u16or32 *src;
-     Pixel   *map;
+static void pack_24(src, dst)
+     u_char  *src;
      u_char  *dst;
 {
   int      i, i_lim;
-  unsigned val;
 
   i_lim = wdth;
 
@@ -1071,10 +1069,9 @@ static void pack_24(src, map, dst)
   {
     for (i=0; i<i_lim; i++)
     {
-      val    = map[src[i]];
-      dst[0] = (val >> 16) & 0xff;
-      dst[1] = (val >> 8) & 0xff;
-      dst[2] = val & 0xff;
+      dst[0] = src[i*3+0];
+      dst[1] = src[i*3+1];
+      dst[2] = src[i*3+2];
       dst   += 3;
     }
   }
@@ -1082,10 +1079,9 @@ static void pack_24(src, map, dst)
   {
     for (i=0; i<i_lim; i++)
     {
-      val    = map[src[i]];
-      dst[0] = val & 0xff;
-      dst[1] = (val >> 8) & 0xff;
-      dst[2] = (val >> 16) & 0xff;
+      dst[0] = src[i*3+2];
+      dst[1] = src[i*3+1];
+      dst[2] = src[i*3+0];
       dst   += 3;
     }
   }
@@ -1094,13 +1090,11 @@ static void pack_24(src, map, dst)
 
 /* pack pixels into ximage format (assuming bits_per_pixel == 32)
  */
-static void pack_32(src, map, dst)
-     u16or32 *src;
-     Pixel   *map;
+static void pack_32(src, dst)
+     u_char  *src;
      u_char  *dst;
 {
   int      i, i_lim;
-  unsigned val;
 
   i_lim = wdth;
 
@@ -1108,11 +1102,10 @@ static void pack_32(src, map, dst)
   {
     for (i=0; i<i_lim; i++)
     {
-      val    = map[src[i]];
-      dst[0] = (val >> 24) & 0xff;
-      dst[1] = (val >> 16) & 0xff;
-      dst[2] = (val >> 8) & 0xff;
-      dst[3] = val & 0xff;
+      dst[0] = 0;
+      dst[1] = src[i*3+0];
+      dst[2] = src[i*3+1];
+      dst[3] = src[i*3+2];
       dst   += 4;
     }
   }
@@ -1120,11 +1113,10 @@ static void pack_32(src, map, dst)
   {
     for (i=0; i<i_lim; i++)
     {
-      val    = map[src[i]];
-      dst[0] = val & 0xff;
-      dst[1] = (val >> 8) & 0xff;
-      dst[2] = (val >> 16) & 0xff;
-      dst[3] = (val >> 24) & 0xff;
+      dst[0] = src[i*3+2];
+      dst[1] = src[i*3+1];
+      dst[2] = src[i*3+0];
+      dst[3] = 0;
       dst   += 4;
     }
   }
@@ -1134,10 +1126,13 @@ static void pack_32(src, map, dst)
 static int x11_row(row)
      u_char *row;
 {
-  if (mono)
-    mono_dither_row(row, dith);
-  else
-    dither_row(row, dith);
+  if (bpp < 24)
+  {
+    if (mono)
+      mono_dither_row(row, dith);
+    else
+      dither_row(row, dith);
+  }
 
   switch (bpp)
   {
@@ -1154,11 +1149,11 @@ static int x11_row(row)
     break;
 
   case 24:
-    pack_24(dith, pels, xbuf);
+    pack_24(row, xbuf);
     break;
 
   case 32:
-    pack_32(dith, pels, xbuf);
+    pack_32(row, xbuf);
     break;
 
   default:
