@@ -129,11 +129,13 @@ int main(argc, argv)
 {
   set_defaults();
 
+  progname = argv[0];
+
   if (using_x(argc, argv))
 #ifdef HAVE_X11
     command_line_x(argc, argv);
 #else
-    exit(1);
+    usage("x11 display mode not supported in this build");
 #endif
   else
     command_line(argc, argv);
