@@ -309,6 +309,7 @@ extern int    grid_small;
 extern int    do_label;
 extern int    do_markers;
 extern char  *markerfile;
+extern char  *overlayfile;
 extern int    wait_time;
 extern double time_warp;
 extern int    fixed_time;

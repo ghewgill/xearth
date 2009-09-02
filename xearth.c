@@ -108,6 +108,7 @@ int      grid_small;            /* dot spacing along grids     */
 int      do_label;              /* label image                 */
 int      do_markers;            /* display markers (X only)    */
 char    *markerfile;            /* for user-spec. marker info  */
+char    *overlayfile;           /* for image overlay file      */
 int      wait_time;             /* wait time between redraw    */
 double   time_warp;             /* passage of time multiplier  */
 int      fixed_time;            /* fixed viewing time (ssue)   */
@@ -665,6 +666,12 @@ void command_line(argc, argv)
       sscanf(argv[i], "%d", &terminator);
       if ((terminator > 100) || (terminator < 0))
         fatal("arg to -term must be between 0 and 100");
+    }
+    else if (strcmp(argv[i], "-overlayfile") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -overlayfile");
+      overlayfile = argv[i];
     }
     else if (strcmp(argv[i], "-gamma") == 0)
     {

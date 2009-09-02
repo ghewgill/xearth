@@ -174,6 +174,7 @@ static char *defaults[] =
   "*grid:       off",
   "*grid1:      6",
   "*grid2:      15",
+  "*overlayfile: none",
   "*gamma:      1.0",
   "*font:       variable",
   "*title:      xearth",
@@ -199,6 +200,7 @@ static XrmOptionDescRec options[] =
 { "-nomarkers",   ".markers",     XrmoptionNoArg,  "off" },
 { "-markerfile",  ".markerfile",  XrmoptionSepArg, 0     },
 { "-showmarkers", ".showmarkers", XrmoptionNoArg,  "on"  },
+{ "-overlayfile", ".overlayfile", XrmoptionSepArg, 0     },
 { "-wait",        ".wait",        XrmoptionSepArg, 0     },
 { "-timewarp",    ".timewarp",    XrmoptionSepArg, 0     },
 { "-day",         ".day",         XrmoptionSepArg, 0     },
@@ -334,6 +336,7 @@ static void process_opts()
   xgamma          = get_float_resource("gamma", "Gamma");
   font_name       = get_string_resource("font", "Font");
   mono            = get_boolean_resource("mono", "Mono");
+  overlayfile     = get_string_resource("overlayfile", "Overlayfile");
 
   /* various sanity checks on simple resources
    */

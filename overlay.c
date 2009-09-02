@@ -13,11 +13,12 @@ static gdImagePtr overlay;
 
 void overlay_init()
 {
-    //const char *fn = "TRKWLDUS.GIF";
-    const char *fn = "world.topo.bathy.200407.3x5400x2700.jpg";
-    FILE *f = fopen(fn, "rb");
+    if (overlayfile == NULL) {
+        return;
+    }
+    FILE *f = fopen(overlayfile, "rb");
     if (f == NULL) {
-        fprintf(stderr, "xearth: warning: file not found: %s\n", fn);
+        fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
         return;
     }
     switch (image_type(f)) {
@@ -31,7 +32,7 @@ void overlay_init()
         overlay = gdImageCreateFromJpeg(f);
         break;
     default:
-        fprintf(stderr, "xearth: warning: unknown image file format: %s\n", fn);
+        fprintf(stderr, "xearth: warning: unknown image file format: %s\n", overlayfile);
         overlay = NULL;
         break;
     }
