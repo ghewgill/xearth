@@ -53,12 +53,12 @@ endif
 
 PROG	= xearth
 SRCS	= xearth.c dither.c extarr.c gif.c gifout.c jpeg.c mapdata.c \
-	  markers.c png.c ppm.c render.c scan.c sunpos.c
+	  markers.c overlay.c png.c ppm.c render.c scan.c sunpos.c
 ifdef HAVE_X11
 SRCS    += resources.c x11.c
 endif
 OBJS	= xearth.o dither.o extarr.o gif.o gifout.o jpeg.o mapdata.o \
-	  markers.o png.o ppm.o render.o scan.o sunpos.o
+	  markers.o overlay.o png.o ppm.o render.o scan.o sunpos.o
 ifdef HAVE_X11
 OBJS    += resources.o x11.o
 endif
@@ -71,7 +71,7 @@ TARFILE = xearth.tar
 DIST	= Imakefile Makefile.DIST README INSTALL HISTORY BUILT-IN \
 	  GAMMA-TEST gamma-test.gif xearth.man dither.c extarr.c \
 	  extarr.h gif.c gifint.h giflib.h gifout.c jpeg.c kljcpyrt.h \
-	  mapdata.c markers.c port.h png.c ppm.c render.c resources.c \
+	  mapdata.c markers.c overlay.c port.h png.c ppm.c render.c resources.c \
 	  scan.c sunpos.c x11.c xearth.c xearth.h
 
 all:	$(PROG)
