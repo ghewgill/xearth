@@ -46,6 +46,11 @@ int overlay_pixel(double lat, double lon)
     int x = (int) ((lon + M_PI) * gdImageSX(overlay) / (2*M_PI));
     double r = 1.0; //gdImageSX(overlay) / (gdImageSY(overlay) * 2.0);
     int y = (int) (-lat * gdImageSY(overlay) / M_PI * r + gdImageSY(overlay)/2);
+    /* handle minor rounding errors */
+    if (x == -1) x++;
+    if (x == gdImageSX(overlay)) x--;
+    if (y == -1) y++;
+    if (y == gdImageSY(overlay)) y--;
     if (x < 0 || x >= gdImageSX(overlay) || y < 0 || y >= gdImageSY(overlay)) {
         return -1;
     }
