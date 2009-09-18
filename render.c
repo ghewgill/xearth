@@ -138,24 +138,28 @@ static void render_next_row(buf, idx)
         double ix = INV_XPROJECT(i);
         double iy = INV_YPROJECT(idx);
         double q[3];
-        switch (proj_type) {
-        case ProjTypeOrthographic:
+        double lat, lon;
+        int p;
+
+        if (proj_type == ProjTypeOrthographic)
+        {
             q[0] = ix;
             q[1] = iy;
             q[2] = sqrt(1 - (ix*ix + iy*iy));
-            break;
-        case ProjTypeMercator:
+        }
+        else if (proj_type == ProjTypeMercator)
+        {
             q[1] = INV_MERCATOR_Y(iy);
             t = sqrt(1 - q[1]*q[1]);
             q[0] = sin(ix) * t;
             q[2] = cos(ix) * t;
-            break;
-        case ProjTypeCylindrical:
+        }
+        else /* (proj_type == ProjTypeCylindrical) */
+        {
             q[1] = INV_CYLINDRICAL_Y(iy);
             t = sqrt(1 - q[1]*q[1]);
             q[0] = sin(ix) * t;
             q[2] = cos(ix) * t;
-            break;
         }
         /* inverse of XFORM_ROTATE */
         {
@@ -183,9 +187,9 @@ static void render_next_row(buf, idx)
           q[1] = _p1_;
           q[2] = _p2_;
         }
-        double lat = asin(q[1]);
-        double lon = atan2(q[0], q[2]);
-        int p = overlay_pixel(lat, lon);
+        lat = asin(q[1]);
+        lon = atan2(q[0], q[2]);
+        p = overlay_pixel(lat, lon);
         if (p != -1) {
             buf[i] = 0x40000000 | p;
         }
@@ -542,7 +546,7 @@ void render(rowfunc)
   s8or32 *scanbuf;
   u_char *row;
   double *inv_x;
-  double  sol[3];
+  double  sol[3] = {0,0,0}; /* initialize to suppress spurious unused warning */
   double  tmp;
 
   scanbuf = (s8or32 *) malloc((unsigned) (sizeof(s8or32) * wdth));

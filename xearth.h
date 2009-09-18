@@ -54,9 +54,11 @@ typedef unsigned short u_short;
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <time.h>
+#include <unistd.h>
 #include "port.h"
 #include "extarr.h"
 #include "kljcpyrt.h"
@@ -237,6 +239,9 @@ typedef struct
   int   align;
 } MarkerInfo;
 
+/* bmp.c */
+extern void bmp_output _P((void));
+
 /* dither.c */
 extern int     dither_ncolors;
 extern u_char *dither_colormap;
@@ -250,6 +255,9 @@ extern void    mono_dither_cleanup _P((void));
 /* gif.c */
 extern void gif_output _P((void));
 
+/* jpeg.c */
+extern void jpeg_output _P((void));
+
 /* mapdata.c */
 extern short map_data[];
 
@@ -257,6 +265,14 @@ extern short map_data[];
 extern MarkerInfo *marker_info;
 extern void        load_marker_info _P((char *));
 extern void        show_marker_info _P((char *));
+
+/* overlay.c */
+extern void overlay_init _P((void));
+extern int overlay_pixel _P((double, double));
+extern void overlay_close _P((void));
+
+/* png.c */
+extern void png_output _P((void));
 
 /* ppm.c */
 extern void ppm_output _P((void));

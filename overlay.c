@@ -13,10 +13,12 @@ static gdImagePtr overlay;
 
 void overlay_init()
 {
+    FILE *f;
+
     if (overlayfile == NULL) {
         return;
     }
-    FILE *f = fopen(overlayfile, "rb");
+    f = fopen(overlayfile, "rb");
     if (f == NULL) {
         fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
         return;
@@ -41,12 +43,16 @@ void overlay_init()
 
 int overlay_pixel(double lat, double lon)
 {
+    int x, y;
+    double r;
+    int c;
+
     if (overlay == NULL) {
         return -1;
     }
-    int x = (int) ((lon + M_PI) * gdImageSX(overlay) / (2*M_PI));
-    double r = 1.0; //gdImageSX(overlay) / (gdImageSY(overlay) * 2.0);
-    int y = (int) (-lat * gdImageSY(overlay) / M_PI * r + gdImageSY(overlay)/2);
+    x = (int) ((lon + M_PI) * gdImageSX(overlay) / (2*M_PI));
+    r = 1.0; /* gdImageSX(overlay) / (gdImageSY(overlay) * 2.0); */
+    y = (int) (-lat * gdImageSY(overlay) / M_PI * r + gdImageSY(overlay)/2);
     /* handle minor rounding errors */
     if (x == -1) x++;
     if (x == gdImageSX(overlay)) x--;
@@ -55,7 +61,7 @@ int overlay_pixel(double lat, double lon)
     if (x < 0 || x >= gdImageSX(overlay) || y < 0 || y >= gdImageSY(overlay)) {
         return -1;
     }
-    int c = gdImageGetPixel(overlay, x, y);
+    c = gdImageGetPixel(overlay, x, y);
     return PixRGB(gdImageRed(overlay, c), gdImageGreen(overlay, c), gdImageBlue(overlay, c));
 }
 

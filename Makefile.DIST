@@ -45,7 +45,7 @@ DEFINES += -DHAVE_X11
 endif
 INCLUDES= -I/opt/local/include
 CC	= gcc
-CFLAGS	= -O2 $(INCLUDES) $(DEFINES)
+CFLAGS	= -O2 $(INCLUDES) $(DEFINES) -ansi -pedantic -Wall 
 LDFLAGS = -L/opt/local/lib
 ifdef HAVE_X11
 LDFLAGS += -L/usr/X11R6/lib

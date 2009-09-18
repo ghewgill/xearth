@@ -107,6 +107,8 @@ void bmp_output()
 static void bmp_setup()
 {
   int  i;
+  struct BITMAPFILEHEADER bmf;
+  struct BITMAPINFOHEADER bmi;
 
   if (num_colors > 256)
     fatal("number of colors must be <= 256 with BMP output");
@@ -118,7 +120,6 @@ static void bmp_setup()
   assert(sizeof(struct BITMAPFILEHEADER) == 14);
   assert(sizeof(struct BITMAPINFOHEADER) == 40);
 
-  struct BITMAPFILEHEADER bmf;
   bmf.bfType[0] = 'B';
   bmf.bfType[1] = 'M';
   bmf.bfSize = sizeof(struct BITMAPFILEHEADER)
@@ -132,7 +133,6 @@ static void bmp_setup()
                 + num_colors * sizeof(struct RGBQUAD);
   fwrite(&bmf, 1, sizeof(bmf), stdout);
 
-  struct BITMAPINFOHEADER bmi;
   bmi.biSize = sizeof(bmi);
   bmi.biWidth = wdth;
   bmi.biHeight = -hght;
@@ -167,7 +167,8 @@ static int bmp_row(row)
   tmp = dith;
   dither_row(row, tmp);
 
-  for (i = 0; i < 4 * ((wdth + 3) / 4); i++)
+  i_lim = 4 * ((wdth + 3) / 4);
+  for (i = 0; i < i_lim; i++)
     fwrite(tmp+i, 1, 1, stdout);
 
   return 0;

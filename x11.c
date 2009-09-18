@@ -797,7 +797,7 @@ static void get_geometry()
   char *res;
   int   mask;
   int   x, y;
-  int   w, h;
+  unsigned int   w, h;
 
   res = get_string_resource("root", "Root");
   if (res != NULL)
@@ -1523,6 +1523,7 @@ static void freePrevious(dpy, w)
                           &format, &nitems, &bytes_after,
                           (unsigned char **) &pm) == Success) &&
       (nitems == 1))
+  {
     if ((actual_type == XA_PIXMAP) && (format == 32) &&
         (nitems == 1) && (bytes_after == 0))
     {
@@ -1542,6 +1543,7 @@ static void freePrevious(dpy, w)
               "%s: warning: invalid format encountered for property %s\n",
               RETAIN_PROP_NAME, progname);
     }
+  }
 }
 
 

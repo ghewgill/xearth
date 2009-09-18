@@ -42,7 +42,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-static const char *Copyright =
+static __attribute__((__unused__)) const char *Copyright =
  "Copyright (C) 1989, 1990, 1993-1995, 1999 Kirk Lauritz Johnson";
 
 #endif
