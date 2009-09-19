@@ -76,7 +76,10 @@ static void ppm_setup(s)
 static int ppm_row(row)
      u_char *row;
 {
-  assert(fwrite(row, 1, bytes_per_row, outs) == bytes_per_row);
+  int n;
+
+  n = fwrite(row, 1, bytes_per_row, outs);
+  assert(n == bytes_per_row);
 
   return 0;
 }
