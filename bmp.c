@@ -49,6 +49,9 @@
 static void bmp_setup _P((void));
 static int  bmp_row _P((u_char *));
 static void bmp_cleanup _P((void));
+static void bmp_truecolor_setup _P((void));
+static int  bmp_truecolor_row _P((u_char *));
+static void bmp_truecolor_cleanup _P((void));
 
 #pragma pack(push, 1)
 
@@ -98,9 +101,18 @@ void bmp_output()
   compute_positions();
   scan_map();
   do_dots();
-  bmp_setup();
-  render(bmp_row);
-  bmp_cleanup();
+  if (num_colors > 256)
+  {
+    bmp_truecolor_setup();
+    render(bmp_truecolor_row);
+    bmp_truecolor_cleanup();
+  }
+  else
+  {
+    bmp_setup();
+    render(bmp_row);
+    bmp_cleanup();
+  }
 }
 
 
@@ -109,9 +121,6 @@ static void bmp_setup()
   int  i;
   struct BITMAPFILEHEADER bmf;
   struct BITMAPINFOHEADER bmi;
-
-  if (num_colors > 256)
-    fatal("number of colors must be <= 256 with BMP output");
 
   dither_setup(num_colors);
   dith = (u16or32 *) malloc((unsigned) sizeof(u16or32) * wdth);
@@ -179,4 +188,60 @@ static void bmp_cleanup()
 {
   dither_cleanup();
   free(dith);
+}
+
+
+static void bmp_truecolor_setup()
+{
+  struct BITMAPFILEHEADER bmf;
+  struct BITMAPINFOHEADER bmi;
+
+  assert(sizeof(struct BITMAPFILEHEADER) == 14);
+  assert(sizeof(struct BITMAPINFOHEADER) == 40);
+
+  bmf.bfType[0] = 'B';
+  bmf.bfType[1] = 'M';
+  bmf.bfSize = sizeof(struct BITMAPFILEHEADER)
+             + sizeof(struct BITMAPINFOHEADER)
+             + hght * 4 * ((3 * wdth + 3) / 4);
+  bmf.bfReserved1 = 0;
+  bmf.bfReserved2 = 0;
+  bmf.bfOffBits = sizeof(struct BITMAPFILEHEADER)
+                + sizeof(struct BITMAPINFOHEADER);
+  fwrite(&bmf, 1, sizeof(bmf), stdout);
+
+  bmi.biSize = sizeof(bmi);
+  bmi.biWidth = wdth;
+  bmi.biHeight = -hght;
+  bmi.biPlanes = 1;
+  bmi.biBitCount = 24;
+  bmi.biCompression = BI_RGB;
+  bmi.biSizeImage = hght * 4 * ((3 * wdth + 3) / 4);
+  bmi.biXPelsPerMeter = 0;
+  bmi.biYPelsPerMeter = 0;
+  bmi.biClrUsed = 0;
+  bmi.biClrImportant = 0;
+  fwrite(&bmi, 1, sizeof(bmi), stdout);
+}
+
+
+static int bmp_truecolor_row(row)
+     u_char *row;
+{
+  int i, i_lim;
+
+  i_lim = 4 * ((wdth + 3) / 4);
+  for (i = 0; i < i_lim; i++)
+  {
+    fwrite(row+3*i+2, 1, 1, stdout);
+    fwrite(row+3*i+1, 1, 1, stdout);
+    fwrite(row+3*i+0, 1, 1, stdout);
+  }
+
+  return 0;
+}
+
+
+static void bmp_truecolor_cleanup()
+{
 }

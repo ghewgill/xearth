@@ -51,6 +51,9 @@
 static void png_setup _P((void));
 static int  png_row _P((u_char *));
 static void png_cleanup _P((FILE *));
+static void png_truecolor_setup _P((void));
+static int  png_truecolor_row _P((u_char *));
+static void png_truecolor_cleanup _P((FILE *));
 
 static u16or32 *dith;
 static gdImagePtr img;
@@ -63,18 +66,24 @@ void png_output()
   compute_positions();
   scan_map();
   do_dots();
-  png_setup();
-  render(png_row);
-  png_cleanup(stdout);
+  if (num_colors > 256)
+  {
+    png_truecolor_setup();
+    render(png_truecolor_row);
+    png_truecolor_cleanup(stdout);
+  }
+  else
+  {
+    png_setup();
+    render(png_row);
+    png_cleanup(stdout);
+  }
 }
 
 
 static void png_setup()
 {
   int  i;
-
-  if (num_colors > 256)
-    fatal("number of colors must be <= 256 with PNG output");
 
   img = gdImageCreate(wdth, hght);
 
@@ -123,4 +132,34 @@ static void png_cleanup(s)
 
   dither_cleanup();
   free(dith);
+}
+
+
+static void png_truecolor_setup()
+{
+  img = gdImageCreateTrueColor(wdth, hght);
+
+  y = 0;
+}
+
+
+static int png_truecolor_row(row)
+     u_char *row;
+{
+  int      i;
+
+  for (i=0; i<wdth; i++)
+    gdImageSetPixel(img, i, y, gdTrueColor(row[i*3+0], row[i*3+1], row[i*3+2]));
+
+  y += 1;
+
+  return 0;
+}
+
+
+static void png_truecolor_cleanup(s)
+     FILE *s;
+{
+  gdImagePng(img, s);
+  gdImageDestroy(img);
 }

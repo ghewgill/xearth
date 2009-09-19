@@ -81,6 +81,7 @@ static void         get_size _P((void));
 static void         get_shift _P((void));
 static void         get_labelpos _P((void));
 static void         get_geometry _P((void));
+static void         get_ncolors _P((void));
 static void         x11_setup _P((void));
 static void         pack_mono_1 _P((u16or32 *, u_char *));
 static void         pack_8 _P((u16or32 *, Pixel *, u_char *));
@@ -308,6 +309,7 @@ static void process_opts()
   get_labelpos();
   get_rotation();
   get_geometry();
+  get_ncolors();
 
   /* process simple resources
    */
@@ -322,7 +324,6 @@ static void process_opts()
   night           = get_integer_resource("night", "Night");
   terminator      = get_integer_resource("term", "Term");
   use_two_pixmaps = get_boolean_resource("twopix", "Twopix");
-  num_colors      = get_integer_resource("ncolors", "Ncolors");
   do_fork         = get_boolean_resource("fork", "Fork");
   do_once         = get_boolean_resource("once", "Once");
   priority        = get_integer_resource("nice", "Nice");
@@ -348,8 +349,6 @@ static void process_opts()
     fatal("arg to -wait must be non-negative");
   if (time_warp <= 0)
     fatal("arg to -timewarp must be positive");
-  if ((num_colors < 3) || (num_colors > 1024))
-    fatal("arg to -ncolors must be between 3 and 1024");
   if ((star_freq < 0) || (star_freq > 1))
     fatal("arg to -starfreq must be between 0 and 1");
   if ((big_stars < 0) || (big_stars > 100))
@@ -366,6 +365,8 @@ static void process_opts()
     fatal("arg to -term must be between 0 and 100");
   if (xgamma <= 0)
     fatal("arg to -gamma must be positive");
+  if (strcmp(overlayfile, "none") == 0)
+    overlayfile = NULL;
 
   /* if we're only rendering once, make sure we don't
    * waste memory by allocating two pixmaps
@@ -737,6 +738,21 @@ static void get_shift()
   if (res != NULL)
   {
     decode_shift(res);
+    free(res);
+  }
+}
+
+
+/* fetch and decode 'ncolors' resource (color depth)
+ */
+static void get_ncolors()
+{
+  char *res;
+
+  res = get_string_resource("ncolors", "Ncolors");
+  if (res != NULL)
+  {
+    decode_colors(res);
     free(res);
   }
 }

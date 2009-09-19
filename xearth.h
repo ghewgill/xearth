@@ -140,6 +140,11 @@ typedef unsigned short u_short;
 #define MarkerAlignAbove   (3)
 #define MarkerAlignBelow   (4)
 
+/* true color indicator
+ * (actually is the number of colors in 24 bits)
+ */
+#define TRUE_COLOR (0x1000000)
+
 /* vector rotation
  */
 #define XFORM_ROTATE(p,vpi)             \
@@ -347,6 +352,7 @@ extern void   decode_viewing_pos _P((char *));
 extern void   decode_sun_pos _P((char *));
 extern void   decode_size _P((char *));
 extern void   decode_shift _P((char *));
+extern void   decode_colors _P((char *));
 extern void   xearth_bzero _P((char *, unsigned));
 extern void   version_info _P((int));
 extern void   usage _P((const char *)) _noreturn;

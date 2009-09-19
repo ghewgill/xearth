@@ -144,6 +144,9 @@ int main(argc, argv)
   else
     command_line(argc, argv);
 
+  if (overlayfile != NULL)
+    num_colors = TRUE_COLOR;
+
   if (priority != 0)
     set_priority(priority);
 
@@ -734,9 +737,7 @@ void command_line(argc, argv)
     {
       i += 1;
       if (i >= argc) usage("missing arg to -ncolors");
-      sscanf(argv[i], "%d", &num_colors);
-      if ((num_colors < 3) || (num_colors > 1024))
-        fatal("arg to -ncolors must be between 3 and 1024");
+      decode_colors(argv[i]);
     }
     else if (strcmp(argv[i], "-font") == 0)
     {
@@ -1198,6 +1199,41 @@ void decode_shift(s)
   free(argv);
 }
 
+
+/* decode colors; two possibilities:
+ *
+ *  <number> - number of colors
+ *  true     - true (24-bit) color
+ */
+void decode_colors(s)
+     char *s;
+{
+  int  argc;
+  char **argv;
+  const char *msg;
+
+  argv = tokenize (s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "color specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+  if (argc != 1)
+     fatal("wrong number of args in colors specifier");
+
+  if (strcmp (argv[0], "true") == 0)
+  {
+    num_colors = TRUE_COLOR;
+  }
+  else
+  {
+    sscanf(s, "%d", &num_colors);
+    if ((num_colors < 3) || (num_colors > 1024))
+      fatal("arg to -ncolors must be between 3 and 1024, or 'true'");
+  }
+
+  free (argv);
+}
 
 void xearth_bzero(buf, len)
      char    *buf;
