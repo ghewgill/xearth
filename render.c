@@ -781,7 +781,7 @@ static void new_label()
     y -= 2 * dy;                /* 3 lines of text */
   }
 
-  strftime(buf, sizeof(buf), "%d %b %Y %H:%M %Z", gmtime(&current_time));
+  strftime(buf, sizeof(buf), "%d %b %Y %H:%M %Z", localtime(&current_time));
   font_extent(buf, &height, &width);
   if (label_orient & LABEL_LEFT_FLUSH)
     x = label_xvalue;
