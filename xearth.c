@@ -144,6 +144,10 @@ int main(argc, argv)
   else
     command_line(argc, argv);
 
+  if (isatty(fileno(stdout))) {
+    usage("xearth refuses to write image data to a tty");
+  }
+
   if (overlayfile != NULL)
     num_colors = TRUE_COLOR;
 
