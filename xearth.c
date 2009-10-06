@@ -142,10 +142,12 @@ int main(argc, argv)
     usage("x11 display mode not supported in this build");
 #endif
   else
+  {
     command_line(argc, argv);
 
-  if (isatty(fileno(stdout))) {
-    usage("xearth refuses to write image data to a tty");
+    if (isatty(fileno(stdout))) {
+      usage("xearth refuses to write image data to a tty");
+    }
   }
 
   if (overlayfile != NULL)
