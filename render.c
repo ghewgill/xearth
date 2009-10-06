@@ -106,6 +106,66 @@ static void render_rows_setup()
 }
 
 
+static void inverse_project(y, x, lat, lon)
+    int y, x;
+    double *lat, *lon;
+{
+    double ix = INV_XPROJECT(x);
+    double iy = INV_YPROJECT(y);
+    double q[3];
+    double t;
+
+    if (proj_type == ProjTypeOrthographic)
+    {
+        q[0] = ix;
+        q[1] = iy;
+        q[2] = sqrt(1 - (ix*ix + iy*iy));
+    }
+    else if (proj_type == ProjTypeMercator)
+    {
+        q[1] = INV_MERCATOR_Y(iy);
+        t = sqrt(1 - q[1]*q[1]);
+        q[0] = sin(ix) * t;
+        q[2] = cos(ix) * t;
+    }
+    else /* (proj_type == ProjTypeCylindrical) */
+    {
+        q[1] = INV_CYLINDRICAL_Y(iy);
+        t = sqrt(1 - q[1]*q[1]);
+        q[0] = sin(ix) * t;
+        q[2] = cos(ix) * t;
+    }
+    /* inverse of XFORM_ROTATE */
+    {
+      double _p0_, _p1_, _p2_;
+      double _c_, _s_, _t_;
+      _p0_ = q[0];
+      _p1_ = q[1];
+      _p2_ = q[2];
+      _c_  = view_pos_info.cos_rot;
+      _s_  = -view_pos_info.sin_rot;
+      _t_  = (_c_ * _p0_) - (_s_ * _p1_);
+      _p1_ = (_s_ * _p0_) + (_c_ * _p1_);
+      _p0_ = _t_;
+      _c_  = view_pos_info.cos_lat;
+      _s_  = -view_pos_info.sin_lat;
+      _t_  = (_c_ * _p1_) - (_s_ * _p2_);
+      _p2_ = (_s_ * _p1_) + (_c_ * _p2_);
+      _p1_ = _t_;
+      _c_  = view_pos_info.cos_lon;
+      _s_  = -view_pos_info.sin_lon;
+      _t_  = (_c_ * _p0_) - (_s_ * _p2_);
+      _p2_ = (_s_ * _p0_) + (_c_ * _p2_);
+      _p0_ = _t_;
+      q[0] = _p0_;
+      q[1] = _p1_;
+      q[2] = _p2_;
+    }
+    *lat = asin(q[1]);
+    *lon = atan2(q[0], q[2]);
+}
+
+
 static void render_next_row(buf, idx)
      s8or32 *buf;
      int     idx;
@@ -113,7 +173,6 @@ static void render_next_row(buf, idx)
   int      i, i_lim;
   int      tmp;
   int      _scanbitcnt;
-  double   t;
   ScanBit *_scanbit;
 
   xearth_bzero((char *) buf, (unsigned) (sizeof(s8or32) * wdth));
@@ -139,60 +198,10 @@ static void render_next_row(buf, idx)
     {
       for (i=_scanbit->lo_x; i<=i_lim; i++)
       {
-        double ix = INV_XPROJECT(i);
-        double iy = INV_YPROJECT(idx);
-        double q[3];
         double lat, lon;
         int p;
 
-        if (proj_type == ProjTypeOrthographic)
-        {
-            q[0] = ix;
-            q[1] = iy;
-            q[2] = sqrt(1 - (ix*ix + iy*iy));
-        }
-        else if (proj_type == ProjTypeMercator)
-        {
-            q[1] = INV_MERCATOR_Y(iy);
-            t = sqrt(1 - q[1]*q[1]);
-            q[0] = sin(ix) * t;
-            q[2] = cos(ix) * t;
-        }
-        else /* (proj_type == ProjTypeCylindrical) */
-        {
-            q[1] = INV_CYLINDRICAL_Y(iy);
-            t = sqrt(1 - q[1]*q[1]);
-            q[0] = sin(ix) * t;
-            q[2] = cos(ix) * t;
-        }
-        /* inverse of XFORM_ROTATE */
-        {
-          double _p0_, _p1_, _p2_;
-          double _c_, _s_, _t_;
-          _p0_ = q[0];
-          _p1_ = q[1];
-          _p2_ = q[2];
-          _c_  = view_pos_info.cos_rot;
-          _s_  = -view_pos_info.sin_rot;
-          _t_  = (_c_ * _p0_) - (_s_ * _p1_);
-          _p1_ = (_s_ * _p0_) + (_c_ * _p1_);
-          _p0_ = _t_;
-          _c_  = view_pos_info.cos_lat;
-          _s_  = -view_pos_info.sin_lat;
-          _t_  = (_c_ * _p1_) - (_s_ * _p2_);
-          _p2_ = (_s_ * _p1_) + (_c_ * _p2_);
-          _p1_ = _t_;
-          _c_  = view_pos_info.cos_lon;
-          _s_  = -view_pos_info.sin_lon;
-          _t_  = (_c_ * _p0_) - (_s_ * _p2_);
-          _p2_ = (_s_ * _p0_) + (_c_ * _p2_);
-          _p0_ = _t_;
-          q[0] = _p0_;
-          q[1] = _p1_;
-          q[2] = _p2_;
-        }
-        lat = asin(q[1]);
-        lon = atan2(q[0], q[2]);
+        inverse_project(idx, i, &lat, &lon);
         p = overlay_pixel(lat, lon);
         if (p != -1) {
             buf[i] = 0x40000000 | p;
