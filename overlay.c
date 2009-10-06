@@ -15,30 +15,29 @@ void overlay_init()
 {
     FILE *f;
 
-    if (overlayfile == NULL) {
-        return;
+    if (overlayfile != NULL) {
+        f = fopen(overlayfile, "rb");
+        if (f != NULL) {
+            switch (image_type(f)) {
+            case ImageGif:
+                overlay = gdImageCreateFromGif(f);
+                break;
+            case ImagePng:
+                overlay = gdImageCreateFromPng(f);
+                break;
+            case ImageJpeg:
+                overlay = gdImageCreateFromJpeg(f);
+                break;
+            default:
+                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", overlayfile);
+                overlay = NULL;
+                break;
+            }
+            fclose(f);
+        } else {
+            fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
+        }
     }
-    f = fopen(overlayfile, "rb");
-    if (f == NULL) {
-        fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
-        return;
-    }
-    switch (image_type(f)) {
-    case ImageGif:
-        overlay = gdImageCreateFromGif(f);
-        break;
-    case ImagePng:
-        overlay = gdImageCreateFromPng(f);
-        break;
-    case ImageJpeg:
-        overlay = gdImageCreateFromJpeg(f);
-        break;
-    default:
-        fprintf(stderr, "xearth: warning: unknown image file format: %s\n", overlayfile);
-        overlay = NULL;
-        break;
-    }
-    fclose(f);
 }
 
 int overlay_pixel(double lat, double lon)
