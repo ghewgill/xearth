@@ -174,49 +174,48 @@ static void render_next_row(buf, idx)
   int      tmp;
   int      _scanbitcnt;
   ScanBit *_scanbit;
+  double   lat, lon;
+  int      p;
 
   xearth_bzero((char *) buf, (unsigned) (sizeof(s8or32) * wdth));
 
-  /* explicitly copy scanbitcnt and scanbit to local variables
-   * to help compilers figure out that they can be registered
-   */
-  _scanbitcnt = scanbitcnt;
-  _scanbit    = scanbit;
-
-  while ((_scanbitcnt > 0) && (_scanbit->y == idx))
+  if (overlayfile == NULL)
   {
-    /* use i_lim to encourage compilers to register loop limit
+    /* explicitly copy scanbitcnt and scanbit to local variables
+     * to help compilers figure out that they can be registered
      */
-    i_lim = _scanbit->hi_x;
-    tmp   = _scanbit->val;
-    if (overlayfile == NULL)
+    _scanbitcnt = scanbitcnt;
+    _scanbit    = scanbit;
+
+    while ((_scanbitcnt > 0) && (_scanbit->y == idx))
     {
+      /* use i_lim to encourage compilers to register loop limit
+       */
+      i_lim = _scanbit->hi_x;
+      tmp   = _scanbit->val;
       for (i=_scanbit->lo_x; i<=i_lim; i++)
         buf[i] += tmp;
-    }
-    else
-    {
-      for (i=_scanbit->lo_x; i<=i_lim; i++)
-      {
-        double lat, lon;
-        int p;
 
-        inverse_project(idx, i, &lat, &lon);
-        p = overlay_pixel(lat, lon);
-        if (p != -1) {
-            buf[i] = 0x40000000 | p;
-        }
+      _scanbit    += 1;
+      _scanbitcnt -= 1;
+    }
+
+    /* copy changes to scanbitcnt and scanbit out to memory
+     */
+    scanbitcnt = _scanbitcnt;
+    scanbit    = _scanbit;
+  }
+  else
+  {
+    for (i=0; i<=wdth; i++)
+    {
+      inverse_project(idx, i, &lat, &lon);
+      p = overlay_pixel(lat, lon);
+      if (p != -1) {
+          buf[i] = 0x40000000 | p;
       }
     }
-
-    _scanbit    += 1;
-    _scanbitcnt -= 1;
   }
-
-  /* copy changes to scanbitcnt and scanbit out to memory
-   */
-  scanbitcnt = _scanbitcnt;
-  scanbit    = _scanbit;
 
   /* use i_lim to encourage compilers to register loop limit
    */
@@ -225,6 +224,12 @@ static void render_next_row(buf, idx)
   {
     if ((buf[i] & 0x40000000) == 0)
       buf[i] = scan_to_pix[(int) (buf[i] & 0xff)];
+
+    if (cloudfile != NULL)
+    {
+      inverse_project(idx, i, &lat, &lon);
+      buf[i] = cloud_pixel(lat, lon, buf[i]);
+    }
   }
 
   while ((dotcnt > 0) && (dot->y == idx))

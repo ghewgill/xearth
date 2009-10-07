@@ -10,6 +10,7 @@
 static int image_type _P((FILE *));
 
 static gdImagePtr overlay;
+static gdImagePtr clouds;
 
 void overlay_init()
 {
@@ -38,6 +39,28 @@ void overlay_init()
             fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
         }
     }
+    if (cloudfile != NULL) {
+        f = fopen(cloudfile, "rb");
+        if (f != NULL) {
+            switch (image_type(f)) {
+            case ImageGif:
+                clouds = gdImageCreateFromGif(f);
+                break;
+            case ImagePng:
+                clouds = gdImageCreateFromPng(f);
+                break;
+            case ImageJpeg:
+                clouds = gdImageCreateFromJpeg(f);
+                break;
+            default:
+                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", cloudfile);
+                break;
+            }
+            fclose(f);
+        } else {
+            fprintf(stderr, "xearth: warning: file not found: %s\n", cloudfile);
+        }
+    }
 }
 
 int overlay_pixel(double lat, double lon)
@@ -64,12 +87,44 @@ int overlay_pixel(double lat, double lon)
     return PixRGB(gdImageRed(overlay, c), gdImageGreen(overlay, c), gdImageBlue(overlay, c));
 }
 
+int cloud_pixel(double lat, double lon, int p)
+{
+    int x, y;
+
+    if (clouds == NULL) {
+        return p;
+    }
+    x = (int) ((lon + M_PI) * gdImageSX(clouds) / (2*M_PI));
+    y = (int) (-lat * gdImageSY(clouds) / M_PI + gdImageSY(clouds)/2);
+    /* handle minor rounding errors */
+    if (x == -1) x++;
+    if (x == gdImageSX(clouds)) x--;
+    if (y == -1) y++;
+    if (y == gdImageSY(clouds)) y--;
+    if (x >= 0 && x < gdImageSX(clouds) && y >= 0 && y < gdImageSY(clouds)) {
+        int c = gdImageGetPixel(clouds, x, y);
+        int r = PixRed(p);
+        int g = PixGreen(p);
+        int b = PixBlue(p);
+        return PixRGB(
+            r + gdImageRed(clouds, c) * (255 - r) / 255,
+            g + gdImageGreen(clouds, c) * (255 - g) / 255,
+            b + gdImageBlue(clouds, c) * (255 - b) / 255
+        );
+    }
+    return p;
+}
+
 void overlay_close()
 {
     if (overlay != NULL) {
         gdImageDestroy(overlay);
     }
     overlay = NULL;
+    if (clouds != NULL) {
+        gdImageDestroy(clouds);
+    }
+    clouds = NULL;
 }
 
 static int image_type(f)

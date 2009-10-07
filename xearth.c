@@ -110,6 +110,7 @@ int      do_label;              /* label image                 */
 int      do_markers;            /* display markers (X only)    */
 char    *markerfile;            /* for user-spec. marker info  */
 char    *overlayfile;           /* for image overlay file      */
+char    *cloudfile;             /* for cloud overlay file      */
 int      wait_time;             /* wait time between redraw    */
 double   time_warp;             /* passage of time multiplier  */
 int      fixed_time;            /* fixed viewing time (ssue)   */
@@ -150,7 +151,7 @@ int main(argc, argv)
     }
   }
 
-  if (overlayfile != NULL)
+  if (overlayfile != NULL || cloudfile != NULL)
     num_colors = TRUE_COLOR;
 
   if (priority != 0)
@@ -688,6 +689,12 @@ void command_line(argc, argv)
       i += 1;
       if (i >= argc) usage("missing arg to -overlayfile");
       overlayfile = argv[i];
+    }
+    else if (strcmp(argv[i], "-cloudfile") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -cloudfile");
+      cloudfile = argv[i];
     }
     else if (strcmp(argv[i], "-gamma") == 0)
     {

@@ -278,6 +278,7 @@ extern void        show_marker_info _P((char *));
 /* overlay.c */
 extern void overlay_init _P((void));
 extern int overlay_pixel _P((double, double));
+extern int cloud_pixel _P((double, double, int));
 extern void overlay_close _P((void));
 
 /* png.c */
@@ -335,6 +336,7 @@ extern int    do_label;
 extern int    do_markers;
 extern char  *markerfile;
 extern char  *overlayfile;
+extern char  *cloudfile;
 extern int    wait_time;
 extern double time_warp;
 extern int    fixed_time;
