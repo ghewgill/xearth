@@ -11,10 +11,12 @@ static int image_type _P((FILE *));
 
 static gdImagePtr overlay;
 static gdImagePtr clouds;
+static int clouds_alpha;
 
 void overlay_init()
 {
     FILE *f;
+    int x;
 
     if (overlayfile != NULL) {
         f = fopen(overlayfile, "rb");
@@ -57,6 +59,12 @@ void overlay_init()
                 break;
             }
             fclose(f);
+            for (x = 0; x < gdImageSX(clouds); x++) {
+                if (gdImageAlpha(clouds, gdImageGetPixel(clouds, x, gdImageSY(clouds) / 2)) != 0) {
+                    clouds_alpha = 1;
+                    break;
+                }
+            }
         } else {
             fprintf(stderr, "xearth: warning: file not found: %s\n", cloudfile);
         }
@@ -106,11 +114,20 @@ int cloud_pixel(double lat, double lon, int p)
         int r = PixRed(p);
         int g = PixGreen(p);
         int b = PixBlue(p);
-        return PixRGB(
-            r + gdImageRed(clouds, c) * (255 - r) / 255,
-            g + gdImageGreen(clouds, c) * (255 - g) / 255,
-            b + gdImageBlue(clouds, c) * (255 - b) / 255
-        );
+        if (clouds_alpha) {
+            int a = gdImageAlpha(clouds, c);
+            return PixRGB(
+                a * r / 127 + (127 - a) * gdImageRed(clouds, c) / 127,
+                a * g / 127 + (127 - a) * gdImageGreen(clouds, c) / 127,
+                a * b / 127 + (127 - a) * gdImageBlue(clouds, c) / 127
+            );
+        } else {
+            return PixRGB(
+                r + gdImageRed(clouds, c) * (255 - r) / 255,
+                g + gdImageGreen(clouds, c) * (255 - g) / 255,
+                b + gdImageBlue(clouds, c) * (255 - b) / 255
+            );
+        }
     }
     return p;
 }
