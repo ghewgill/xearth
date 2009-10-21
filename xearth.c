@@ -65,7 +65,7 @@ extern int errno;
 /* tokens in specifiers are delimited by spaces, tabs, commas, and
  * forward slashes
  */
-#define IsTokenDelim(x)  (((x)==' ')||((x)=='\t')||((x)==',')||((x)=='/'))
+#define IsTokenDelim(x)  (((x)==' ')||((x)=='\t')||((x)==',')||((x)==' '))
 #define NotTokenDelim(x) (!IsTokenDelim(x))
 
 int  main _P((int, char *[]));
@@ -109,8 +109,9 @@ int      grid_small;            /* dot spacing along grids     */
 int      do_label;              /* label image                 */
 int      do_markers;            /* display markers (X only)    */
 char    *markerfile;            /* for user-spec. marker info  */
-char    *overlayfile;           /* for image overlay file      */
-char    *cloudfile;             /* for cloud overlay file      */
+char    *mapfile;               /* for image overlay file      */
+char    *overlayfile[MAX_OVERLAY]; /* for overlay file             */
+int      overlay_count;         /* number of overlay files     */
 int      wait_time;             /* wait time between redraw    */
 double   time_warp;             /* passage of time multiplier  */
 int      fixed_time;            /* fixed viewing time (ssue)   */
@@ -151,7 +152,7 @@ int main(argc, argv)
     }
   }
 
-  if (overlayfile != NULL || cloudfile != NULL)
+  if (mapfile != NULL || overlayfile[0] != NULL)
     num_colors = TRUE_COLOR;
 
   if (priority != 0)
@@ -684,17 +685,17 @@ void command_line(argc, argv)
       if ((terminator > 100) || (terminator < 0))
         fatal("arg to -term must be between 0 and 100");
     }
+    else if (strcmp(argv[i], "-mapfile") == 0)
+    {
+      i += 1;
+      if (i >= argc) usage("missing arg to -mapfile");
+      mapfile = argv[i];
+    }
     else if (strcmp(argv[i], "-overlayfile") == 0)
     {
       i += 1;
       if (i >= argc) usage("missing arg to -overlayfile");
-      overlayfile = argv[i];
-    }
-    else if (strcmp(argv[i], "-cloudfile") == 0)
-    {
-      i += 1;
-      if (i >= argc) usage("missing arg to -cloudfile");
-      cloudfile = argv[i];
+      decode_overlay(argv[i]);
     }
     else if (strcmp(argv[i], "-gamma") == 0)
     {
@@ -1245,6 +1246,34 @@ void decode_colors(s)
   }
 
   free (argv);
+}
+
+
+/* decode overlay
+ */
+void decode_overlay(s)
+     char *s;
+{
+  int         argc, i;
+  char      **argv;
+  const char *msg;
+
+  argv = tokenize(s, &argc, &msg);
+  if (msg != NULL)
+  {
+    sprintf(errmsgbuf, "overlay specifier: %s", msg);
+    warning(errmsgbuf);
+  }
+
+  if (argc > MAX_OVERLAY)
+    fatal("too many overlay files specified");
+
+  for (i = 0; i < argc; i++)
+    overlayfile[i] = argv[i];
+
+  overlay_count = argc;
+
+  free(argv);
 }
 
 void xearth_bzero(buf, len)

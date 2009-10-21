@@ -9,124 +9,130 @@
 
 static int image_type _P((FILE *));
 
-static gdImagePtr overlay;
-static gdImagePtr clouds;
-static int clouds_alpha;
+static gdImagePtr map;
+static gdImagePtr overlay[MAX_OVERLAY];
+static int overlay_alpha[MAX_OVERLAY];
 
 void overlay_init()
 {
     FILE *f;
+    int i;
     int x;
 
-    if (overlayfile != NULL) {
-        f = fopen(overlayfile, "rb");
+    if (mapfile != NULL) {
+        f = fopen(mapfile, "rb");
         if (f != NULL) {
             switch (image_type(f)) {
             case ImageGif:
-                overlay = gdImageCreateFromGif(f);
+                map = gdImageCreateFromGif(f);
                 break;
             case ImagePng:
-                overlay = gdImageCreateFromPng(f);
+                map = gdImageCreateFromPng(f);
                 break;
             case ImageJpeg:
-                overlay = gdImageCreateFromJpeg(f);
+                map = gdImageCreateFromJpeg(f);
                 break;
             default:
-                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", overlayfile);
-                overlay = NULL;
+                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", mapfile);
+                map = NULL;
                 break;
             }
             fclose(f);
         } else {
-            fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile);
+            fprintf(stderr, "xearth: warning: file not found: %s\n", mapfile);
         }
     }
-    if (cloudfile != NULL) {
-        f = fopen(cloudfile, "rb");
+    for (i = 0; i < overlay_count; i++) {
+        f = fopen(overlayfile[i], "rb");
         if (f != NULL) {
             switch (image_type(f)) {
             case ImageGif:
-                clouds = gdImageCreateFromGif(f);
+                overlay[i] = gdImageCreateFromGif(f);
                 break;
             case ImagePng:
-                clouds = gdImageCreateFromPng(f);
+                overlay[i] = gdImageCreateFromPng(f);
                 break;
             case ImageJpeg:
-                clouds = gdImageCreateFromJpeg(f);
+                overlay[i] = gdImageCreateFromJpeg(f);
                 break;
             default:
-                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", cloudfile);
+                fprintf(stderr, "xearth: warning: unknown image file format: %s\n", overlayfile[i]);
                 break;
             }
             fclose(f);
-            for (x = 0; x < gdImageSX(clouds); x++) {
-                if (gdImageAlpha(clouds, gdImageGetPixel(clouds, x, gdImageSY(clouds) / 2)) != 0) {
-                    clouds_alpha = 1;
+            overlay_alpha[i] = 0;
+            for (x = 0; x < gdImageSX(overlay[i]); x++) {
+                if (gdImageAlpha(overlay[i], gdImageGetPixel(overlay[i], x, gdImageSY(overlay[i]) / 2)) != 0) {
+                    overlay_alpha[i] = 1;
                     break;
                 }
             }
         } else {
-            fprintf(stderr, "xearth: warning: file not found: %s\n", cloudfile);
+            fprintf(stderr, "xearth: warning: file not found: %s\n", overlayfile[i]);
         }
     }
 }
 
-int overlay_pixel(double lat, double lon)
+int map_pixel(double lat, double lon)
 {
     int x, y;
     double r;
     int c;
 
-    if (overlay == NULL) {
+    if (map == NULL) {
         return -1;
     }
-    x = (int) ((lon + M_PI) * gdImageSX(overlay) / (2*M_PI));
-    r = 1.0; /* gdImageSX(overlay) / (gdImageSY(overlay) * 2.0); */
-    y = (int) (-lat * gdImageSY(overlay) / M_PI * r + gdImageSY(overlay)/2);
+    x = (int) ((lon + M_PI) * gdImageSX(map) / (2*M_PI));
+    r = 1.0; /* gdImageSX(map) / (gdImageSY(map) * 2.0); */
+    y = (int) (-lat * gdImageSY(map) / M_PI * r + gdImageSY(map)/2);
     /* handle minor rounding errors */
     if (x == -1) x++;
-    if (x == gdImageSX(overlay)) x--;
+    if (x == gdImageSX(map)) x--;
     if (y == -1) y++;
-    if (y == gdImageSY(overlay)) y--;
-    if (x < 0 || x >= gdImageSX(overlay) || y < 0 || y >= gdImageSY(overlay)) {
+    if (y == gdImageSY(map)) y--;
+    if (x < 0 || x >= gdImageSX(map) || y < 0 || y >= gdImageSY(map)) {
         return -1;
     }
-    c = gdImageGetPixel(overlay, x, y);
-    return PixRGB(gdImageRed(overlay, c), gdImageGreen(overlay, c), gdImageBlue(overlay, c));
+    c = gdImageGetPixel(map, x, y);
+    return PixRGB(gdImageRed(map, c), gdImageGreen(map, c), gdImageBlue(map, c));
 }
 
-int cloud_pixel(double lat, double lon, int p)
+int overlay_pixel(double lat, double lon, int p)
 {
-    int x, y;
+    int i, x, y;
+    gdImagePtr ov;
 
-    if (clouds == NULL) {
-        return p;
-    }
-    x = (int) ((lon + M_PI) * gdImageSX(clouds) / (2*M_PI));
-    y = (int) (-lat * gdImageSY(clouds) / M_PI + gdImageSY(clouds)/2);
-    /* handle minor rounding errors */
-    if (x == -1) x++;
-    if (x == gdImageSX(clouds)) x--;
-    if (y == -1) y++;
-    if (y == gdImageSY(clouds)) y--;
-    if (x >= 0 && x < gdImageSX(clouds) && y >= 0 && y < gdImageSY(clouds)) {
-        int c = gdImageGetPixel(clouds, x, y);
-        int r = PixRed(p);
-        int g = PixGreen(p);
-        int b = PixBlue(p);
-        if (clouds_alpha) {
-            int a = gdImageAlpha(clouds, c);
-            return PixRGB(
-                a * r / 127 + (127 - a) * gdImageRed(clouds, c) / 127,
-                a * g / 127 + (127 - a) * gdImageGreen(clouds, c) / 127,
-                a * b / 127 + (127 - a) * gdImageBlue(clouds, c) / 127
-            );
-        } else {
-            return PixRGB(
-                r + gdImageRed(clouds, c) * (255 - r) / 255,
-                g + gdImageGreen(clouds, c) * (255 - g) / 255,
-                b + gdImageBlue(clouds, c) * (255 - b) / 255
-            );
+    for (i = 0; i < overlay_count; i++) {
+        ov = overlay[i];
+        if (ov == NULL) {
+            continue;
+        }
+        x = (int) ((lon + M_PI) * gdImageSX(ov) / (2*M_PI));
+        y = (int) (-lat * gdImageSY(ov) / M_PI + gdImageSY(ov)/2);
+        /* handle minor rounding errors */
+        if (x == -1) x++;
+        if (x == gdImageSX(ov)) x--;
+        if (y == -1) y++;
+        if (y == gdImageSY(ov)) y--;
+        if (x >= 0 && x < gdImageSX(ov) && y >= 0 && y < gdImageSY(ov)) {
+            int c = gdImageGetPixel(ov, x, y);
+            int r = PixRed(p);
+            int g = PixGreen(p);
+            int b = PixBlue(p);
+            if (overlay_alpha[i]) {
+                int a = gdImageAlpha(ov, c);
+                p = PixRGB(
+                    a * r / 127 + (127 - a) * gdImageRed(ov, c) / 127,
+                    a * g / 127 + (127 - a) * gdImageGreen(ov, c) / 127,
+                    a * b / 127 + (127 - a) * gdImageBlue(ov, c) / 127
+                );
+            } else {
+                p = PixRGB(
+                    r + gdImageRed(ov, c) * (255 - r) / 255,
+                    g + gdImageGreen(ov, c) * (255 - g) / 255,
+                    b + gdImageBlue(ov, c) * (255 - b) / 255
+                );
+            }
         }
     }
     return p;
@@ -134,14 +140,18 @@ int cloud_pixel(double lat, double lon, int p)
 
 void overlay_close()
 {
-    if (overlay != NULL) {
-        gdImageDestroy(overlay);
+    int i;
+
+    if (map != NULL) {
+        gdImageDestroy(map);
     }
-    overlay = NULL;
-    if (clouds != NULL) {
-        gdImageDestroy(clouds);
+    map = NULL;
+    for (i = 0; i < overlay_count; i++) {
+        if (overlay[i] != NULL) {
+            gdImageDestroy(overlay[i]);
+        }
+        overlay[i] = NULL;
     }
-    clouds = NULL;
 }
 
 static int image_type(f)

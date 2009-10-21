@@ -78,6 +78,8 @@ typedef unsigned short u_short;
 #define M_PI 3.14159265358979323846
 #endif /* !M_PI */
 
+#define MAX_OVERLAY 5
+
 /* a particularly large number
  */
 #define BigNumber (1e6)
@@ -277,8 +279,8 @@ extern void        show_marker_info _P((char *));
 
 /* overlay.c */
 extern void overlay_init _P((void));
-extern int overlay_pixel _P((double, double));
-extern int cloud_pixel _P((double, double, int));
+extern int map_pixel _P((double, double));
+extern int overlay_pixel _P((double, double, int));
 extern void overlay_close _P((void));
 
 /* png.c */
@@ -335,8 +337,9 @@ extern int    grid_small;
 extern int    do_label;
 extern int    do_markers;
 extern char  *markerfile;
-extern char  *overlayfile;
-extern char  *cloudfile;
+extern char  *mapfile;
+extern char  *overlayfile[MAX_OVERLAY];
+extern int    overlay_count;
 extern int    wait_time;
 extern double time_warp;
 extern int    fixed_time;
@@ -359,6 +362,7 @@ extern void   decode_sun_pos _P((char *));
 extern void   decode_size _P((char *));
 extern void   decode_shift _P((char *));
 extern void   decode_colors _P((char *));
+extern void   decode_overlay _P((char *));
 extern void   xearth_bzero _P((char *, unsigned));
 extern void   version_info _P((int));
 extern void   usage _P((const char *)) _noreturn;

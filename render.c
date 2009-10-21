@@ -179,7 +179,7 @@ static void render_next_row(buf, idx)
 
   xearth_bzero((char *) buf, (unsigned) (sizeof(s8or32) * wdth));
 
-  if (overlayfile == NULL)
+  if (mapfile == NULL)
   {
     /* explicitly copy scanbitcnt and scanbit to local variables
      * to help compilers figure out that they can be registered
@@ -210,7 +210,7 @@ static void render_next_row(buf, idx)
     for (i=0; i<=wdth; i++)
     {
       inverse_project(idx, i, &lat, &lon);
-      p = overlay_pixel(lat, lon);
+      p = map_pixel(lat, lon);
       if (p != -1) {
           buf[i] = 0x40000000 | p;
       }
@@ -225,10 +225,10 @@ static void render_next_row(buf, idx)
     if ((buf[i] & 0x40000000) == 0)
       buf[i] = scan_to_pix[(int) (buf[i] & 0xff)];
 
-    if (cloudfile != NULL)
+    if (overlayfile[0] != NULL)
     {
       inverse_project(idx, i, &lat, &lon);
-      buf[i] = cloud_pixel(lat, lon, buf[i]);
+      buf[i] = overlay_pixel(lat, lon, buf[i]);
     }
   }
 
